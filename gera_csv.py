@@ -574,9 +574,18 @@ def pegar_votacoes_orientacoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     return votacoes_orientacoes
 
 
-def pegar_cargos_deputados(legislatura):
+def pegar_cargos_deputados(legislatura, ano_ini_legis, ano_atual, mes=""):
     """
     Função que baixa os arquivos de cargos dos deputados para os anos entre o ano atual e o ano de início da legislatura.
+    
+    Parâmetros:
+    - legislatura: Número da legislatura.
+    - ano_ini_legis: Ano inicial da legislatura.
+    - ano_atual: Ano atual.
+    - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
+    
+    Retorna:
+    - DataFrame Pandas com os cargos dos deputados que têm sobreposição com o período de interesse.
     """
     
     dep_cargo = pd.DataFrame()  # DataFrame vazio para acumular os cargos dos deputados
@@ -597,15 +606,44 @@ def pegar_cargos_deputados(legislatura):
         data['legislat'] = legislatura  
         # Concatenar os dados baixados ao DataFrame principal
         dep_cargo = pd.concat([dep_cargo, data], ignore_index=True)
+    
+    # Aplicar filtro de período
+    if not dep_cargo.empty:
+        # Definir período de interesse
+        data_inicio_periodo = f"{ano_ini_legis}-01-01"
+        
+        if mes:
+            from calendar import monthrange
+            ultimo_dia = monthrange(ano_atual, int(mes))[1]
+            data_fim_periodo = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}"
+        else:
+            data_fim_periodo = f"{ano_atual}-12-31"
+        
+        # Converter datas para datetime
+        dep_cargo['dataInicio_temp'] = pd.to_datetime(dep_cargo['dataInicio'])
+        dep_cargo['dataFim_temp'] = pd.to_datetime(dep_cargo['dataFim'])
+        data_inicio_periodo_dt = pd.to_datetime(data_inicio_periodo)
+        data_fim_periodo_dt = pd.to_datetime(data_fim_periodo)
+        
+        # Filtrar registros com sobreposição:
+        # dataInicio <= data_fim_periodo AND (dataFim >= data_inicio_periodo OR dataFim is null)
+        mask = (dep_cargo['dataInicio_temp'] <= data_fim_periodo_dt) & \
+               ((dep_cargo['dataFim_temp'] >= data_inicio_periodo_dt) | (dep_cargo['dataFim_temp'].isna()))
+        
+        dep_cargo = dep_cargo[mask]
+        dep_cargo = dep_cargo.drop(columns=['dataInicio_temp', 'dataFim_temp'])
 
     return dep_cargo
 
-def pegar_orgaos(pasta_temp="temp"):
+def pegar_orgaos(ano_ini_legis, ano_atual, pasta_temp="temp", mes=""):
     """
     Função que baixa e processa o arquivo de órgãos.
     
     Parâmetros:
+    - ano_ini_legis: Ano inicial da legislatura.
+    - ano_atual: Ano atual.
     - pasta_temp: Diretório onde o arquivo CSV será salvo (padrão: 'temp').
+    - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
     
     Retorna:
     - DataFrame Pandas com o conteúdo dos órgãos.
@@ -615,8 +653,34 @@ def pegar_orgaos(pasta_temp="temp"):
     
     # Utiliza a função genérica para baixar o CSV
     orgaos = baixar_csv_generico("orgaos", url, pasta_temp)
-    orgaos['codSituacao'] =orgaos['codSituacao'].fillna(0).astype(int)
+    orgaos['codSituacao'] = orgaos['codSituacao'].fillna(0).astype(int)
     orgaos['codSituacao'] = orgaos['codSituacao'].astype('int64')
+    
+    # Aplicar filtro de período se os campos existirem
+    if not orgaos.empty and 'dataInicio' in orgaos.columns and 'dataFim' in orgaos.columns:
+        # Definir período de interesse
+        data_inicio_periodo = f"{ano_ini_legis}-01-01"
+        
+        if mes:
+            from calendar import monthrange
+            ultimo_dia = monthrange(ano_atual, int(mes))[1]
+            data_fim_periodo = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}"
+        else:
+            data_fim_periodo = f"{ano_atual}-12-31"
+        
+        # Converter datas para datetime
+        orgaos['dataInicio_temp'] = pd.to_datetime(orgaos['dataInicio'])
+        orgaos['dataFim_temp'] = pd.to_datetime(orgaos['dataFim'])
+        data_inicio_periodo_dt = pd.to_datetime(data_inicio_periodo)
+        data_fim_periodo_dt = pd.to_datetime(data_fim_periodo)
+        
+        # Filtrar registros com sobreposição:
+        # dataInicio <= data_fim_periodo AND (dataFim >= data_inicio_periodo OR dataFim is null)
+        mask = (orgaos['dataInicio_temp'] <= data_fim_periodo_dt) & \
+               ((orgaos['dataFim_temp'] >= data_inicio_periodo_dt) | (orgaos['dataFim_temp'].isna()))
+        
+        orgaos = orgaos[mask]
+        orgaos = orgaos.drop(columns=['dataInicio_temp', 'dataFim_temp'])
 
     return orgaos
 
@@ -1778,29 +1842,29 @@ def main():
     requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis)
     requer_eventos_df.to_csv("./temp/requer_eventos_df.csv", index=False)
 
+    # votações
+    votacoes_df = pegar_votacoes(ano_atual, ano_ini_legis, mes=mes)
+    votacoes_df.to_csv("./temp/votacoes_df.csv", index=False)
+
+    # votações por deputado
+    dep_votacoes_df = pegar_votacoes_deputados(ano_atual, ano_ini_legis, mes=mes)
+    dep_votacoes_df.to_csv("./temp/dep_votacoes_df.csv", index=False)
+
+    # votações e orientações dos líderes
+    part_votacoes_df = pegar_votacoes_orientacoes(ano_atual, ano_ini_legis)
+    part_votacoes_df.to_csv("./temp/part_votacoes_df.csv", index=False)
+
+    # cargos dos deputados
+    cargos_deputados_df = pegar_cargos_deputados(57, ano_ini_legis, ano_atual, mes=mes)
+    cargos_deputados_df.to_csv("./temp/cargos_deputados_df.csv", index=False)
+
+    # órgãos
+    orgaos_df = pegar_orgaos(ano_ini_legis, ano_atual, mes=mes)
+    orgaos_df.to_csv("./temp/orgaos_df.csv", index=False)
+
 if __name__ == "__main__":
     main()
 
-
-    # # votações
-    # votacoes_df = pegar_votacoes(ano_atual, ano_ini_legis)
-    # votacoes_df.to_csv("./temp/votacoes_df.csv", index=False)
-
-    # # votações por deputado
-    # dep_votacoes_df = pegar_votacoes_deputados(ano_atual, ano_ini_legis)
-    # dep_votacoes_df.to_csv("./temp/dep_votacoes_df.csv", index=False)
-
-    # # votações e orientações dos líderes
-    # part_votacoes_df = pegar_votacoes_orientacoes(ano_atual, ano_ini_legis)
-    # part_votacoes_df.to_csv("./temp/part_votacoes_df.csv", index=False)
-
-    # # cargos dos deputados
-    # cargos_deputados_df = pegar_cargos_deputados(57)
-    # cargos_deputados_df.to_csv("./temp/cargos_deputados_df.csv", index=False)
-
-    # # órgãos
-    # orgaos_df = pegar_orgaos()
-    # orgaos_df.to_csv("./temp/orgaos_df.csv", index=False)
 
     # # índice legislativo
     # ind_legis_df = criar_indice_legislativo(dep_eventos_df, dep_votacoes_df)
