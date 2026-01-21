@@ -7,9 +7,9 @@ import re
 from pandas.tseries.offsets import MonthBegin
 import numpy as np
 from datetime import datetime, timedelta
+import argparse
 
-ano_atual = 2024
-ano_ini_legis = 2023
+nocache = False
 
 def convert_to_integer(df):
     for col in df.select_dtypes(include=['float', 'int']).columns:
@@ -25,10 +25,15 @@ def baixar_csv_generico(nome_arquivo, url, pasta_temp="temp", ano = ""):
     - nome_arquivo: Nome base para o arquivo (sem extensão).
     - url: URL de onde o CSV será baixado.
     - pasta_temp: Diretório onde o arquivo será salvo (padrão: 'temp').
+    - ano: Ano do arquivo (opcional).
     
     Retorna:
     - DataFrame Pandas com o conteúdo do CSV.
+    
+    Nota: Usa a variável global 'nocache' para determinar se deve ignorar cache.
     """
+    
+    global nocache
     
     # Verificar se a pasta temporária existe, se não, criá-la
     if not os.path.exists(pasta_temp):
@@ -39,9 +44,8 @@ def baixar_csv_generico(nome_arquivo, url, pasta_temp="temp", ano = ""):
 
     arquivo_csv = os.path.join(pasta_temp, f"{nome_arquivo}_{ano}.csv") if ano else os.path.join(pasta_temp, f"{nome_arquivo}.csv")
 
-    # Verificar se o arquivo já existe, se tem ano e não é o ano atual
-    if os.path.exists(arquivo_csv):
-    # if os.path.exists(arquivo_csv) and ano !="" and ano != str(ano_atual):
+    # Verificar se o arquivo já existe, se tem ano e não é o ano atual, e nocache não está ativo
+    if os.path.exists(arquivo_csv) and ano != "" and ano != str(ano_atual) and not nocache:
         print(f"Arquivo já existe em: {arquivo_csv}")
         try :
             return pd.read_csv(arquivo_csv, sep=';', low_memory=False)
@@ -56,14 +60,70 @@ def baixar_csv_generico(nome_arquivo, url, pasta_temp="temp", ano = ""):
                 raise SystemExit("Erro fatal: O programa foi encerrado.")
     # Caso o arquivo não exista ou o ano seja o atual, fazer o download
     print(f"Baixando o CSV de {nome_arquivo}...{url}")
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(arquivo_csv, 'wb') as file:
-            file.write(response.content)
-        print(f"Arquivo salvo em: {arquivo_csv}")
-    else:
-        print(f"Erro ao baixar o arquivo: {response.status_code}")
-        return None
+    
+    # Headers para simular um navegador
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+    }
+    
+    # Tentar baixar com retry e suporte a resumable download
+    max_tentativas = 5
+    arquivo_temp = arquivo_csv + '.tmp'
+    
+    for tentativa in range(max_tentativas):
+        try:
+            # Verificar se há download parcial
+            resume_byte_pos = 0
+            if os.path.exists(arquivo_temp):
+                resume_byte_pos = os.path.getsize(arquivo_temp)
+                headers['Range'] = f'bytes={resume_byte_pos}-'
+                print(f"Retomando download a partir de {resume_byte_pos} bytes...")
+            
+            response = requests.get(url, timeout=300, stream=True, headers=headers.copy())
+            
+            # 200 = download completo, 206 = partial content (resumindo)
+            if response.status_code in [200, 206]:
+                mode = 'ab' if response.status_code == 206 else 'wb'
+                with open(arquivo_temp, mode) as file:
+                    bytes_downloaded = 0
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            file.write(chunk)
+                            bytes_downloaded += len(chunk)
+                            # Mostrar progresso a cada 10MB
+                            if bytes_downloaded % (10 * 1024 * 1024) < 8192:
+                                print(f"Downloaded: {(resume_byte_pos + bytes_downloaded) / (1024*1024):.2f} MB")
+                
+                # Download completo, renomear arquivo temporário
+                if os.path.exists(arquivo_csv):
+                    os.remove(arquivo_csv)
+                os.rename(arquivo_temp, arquivo_csv)
+                print(f"Arquivo salvo em: {arquivo_csv}")
+                break
+            else:
+                print(f"Erro ao baixar o arquivo: {response.status_code}")
+                if tentativa == max_tentativas - 1:
+                    return None
+        except (requests.exceptions.ChunkedEncodingError, 
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            print(f"Erro na tentativa {tentativa + 1}/{max_tentativas}: {type(e).__name__}")
+            if tentativa < max_tentativas - 1:
+                print(f"Aguardando 5 segundos antes de tentar novamente...")
+                time.sleep(5)
+                # Remove Range header para próxima tentativa caso arquivo temp não exista
+                if 'Range' in headers:
+                    del headers['Range']
+            else:
+                print(f"Falha após {max_tentativas} tentativas")
+                # Limpar arquivo temporário em caso de falha final
+                if os.path.exists(arquivo_temp):
+                    os.remove(arquivo_temp)
+                return None
     # Ler e retornar o CSV baixado
     try:
         return pd.read_csv(arquivo_csv, sep=';', low_memory=False)
@@ -103,7 +163,7 @@ def pegar_deputados(pasta_temp="temp"):
 
     return data
 
-def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de proposições para os anos entre o ano atual e o ano de início da legislatura.
     
@@ -111,6 +171,7 @@ def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     - ano_atual: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
+    - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
     
     Retorna:
     - DataFrame Pandas com o conteúdo de todas as proposições.
@@ -137,9 +198,34 @@ def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
             # Adicionar coluna com o ano em loop
             data['ano.loop'] = ano
             data['dataApresentacao'] = pd.to_datetime(data['dataApresentacao'])
+            
+            # Filtrar até o final do mês especificado no ano_atual
+            if mes and ano == ano_atual:
+                # Criar data limite: último dia do mês especificado no ano_atual
+                from calendar import monthrange
+                ultimo_dia = monthrange(ano_atual, int(mes))[1]
+                data_limite = pd.Timestamp(year=ano_atual, month=int(mes), day=ultimo_dia, hour=23, minute=59, second=59)
+                data = data[data['dataApresentacao'] <= data_limite]
+            
             data['dataApresentacao'] = data['dataApresentacao'].dt.strftime('%Y-%m-%dT%H:%M:%S')
             # Concatenar os dados baixados ao DataFrame principal
             proposicoes = pd.concat([proposicoes, data], ignore_index=True)
+    
+    # Aplicar filtro final se mes foi especificado
+    if mes:
+        from calendar import monthrange
+        ultimo_dia = monthrange(ano_atual, int(mes))[1]
+        data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+        proposicoes['dataApresentacao_temp'] = pd.to_datetime(proposicoes['dataApresentacao'])
+        proposicoes = proposicoes[proposicoes['dataApresentacao_temp'] <= data_limite_str]
+        proposicoes = proposicoes.drop(columns=['dataApresentacao_temp'])
+    
+    # Filtrar proposições para garantir que não há datas anteriores ao ano_ini_legis
+    data_ini_legis = f"{ano_ini_legis}-01-01T00:00:00"
+    proposicoes['dataApresentacao_temp'] = pd.to_datetime(proposicoes['dataApresentacao'])
+    proposicoes = proposicoes[proposicoes['dataApresentacao_temp'] >= data_ini_legis]
+    proposicoes = proposicoes.drop(columns=['dataApresentacao_temp'])
+    
     return proposicoes
 
 
@@ -535,7 +621,7 @@ def processar_proposicoes(proposicoes_df, temas_prop_df, autores_prop_df):
 
     proposicoes_df['id.proposicao'] = proposicoes_df['id.proposicao'].astype(str)
     proposicoes_df = proposicoes_df.drop(columns=['ementa']).drop_duplicates()
-    proposicoes_df.to_csv("/tmp/sem-tema.csv", index=False)
+    proposicoes_df.to_csv("./temp/sem-tema.csv", index=False)
 
     # 2. Processar 'temas.prop'
     temas_filtro = temas_prop_df[temas_prop_df['tema'] == "Homenagens e Datas Comemorativas"]
@@ -547,7 +633,7 @@ def processar_proposicoes(proposicoes_df, temas_prop_df, autores_prop_df):
     
     with pd.option_context('future.no_silent_downcasting', True):
         proposicoes_df['tema'] = proposicoes_df['tema'].fillna(0).astype(int)
-    proposicoes_df.to_csv("/tmp/com_tema.csv", index=False)
+    proposicoes_df.to_csv("./temp/com_tema.csv", index=False)
 
     # 3. Juntar com 'autores.prop'
     autores_prop_df = autores_prop_df.drop(columns=['uriProposicao', 'uriAutor', 'uriPartidoAutor'])
@@ -568,7 +654,7 @@ def processar_proposicoes(proposicoes_df, temas_prop_df, autores_prop_df):
     proposicoes_df['relevancia'] = proposicoes_df.apply(lambda row: 0 if row['keywords'] == 1 or row['tema'] == 1 else 1, axis=1)
     proposicoes_df = proposicoes_df.rename(columns={"ano.loop_y": "ano.loop.y", "ano.loop_x": "ano.loop.x"})
     proposicoes_df = proposicoes_df[proposicoes_df['idDeputadoAutor'].notna() & (proposicoes_df['idDeputadoAutor'] != "") & (proposicoes_df['idDeputadoAutor'] != 0)]    
-    proposicoes_df.to_csv("/tmp/pre_leg.csv", index=False)
+    proposicoes_df.to_csv("./temp/pre_leg.csv", index=False)
 
     # 4. Definir a legislatura
     def definir_legislatura(dataHoraInicio):
@@ -806,7 +892,7 @@ def calcula_var_7(proposicoes_df, ind_legis_df):
     # 3. Renomear colunas
     prov = prov.rename(columns={'N': 'relatorias', 'idDeputadoAutor': 'idDeputado'})
     prov['legislat'] = prov['legislat'].astype('int64')
-    prov.to_csv("/tmp/prov_7.csv", index=False)
+    prov.to_csv("./temp/prov_7.csv", index=False)
 
     # 4. Fazer a junção com o DataFrame ind_legis
     ind_legis_df = pd.merge(ind_legis_df, prov, on=['legislat', 'idDeputado'], how='left')
@@ -945,11 +1031,11 @@ def calcula_var_13(cargos_deputados_df, ind_legis_df):
     prov['idDeputadoAutor'] = pd.to_numeric(prov['id.deputado'], errors='coerce')
     prov = prov.drop(columns=['id.deputado'])
     prov['legislat'] = prov['legislat'].astype(str)
-    prov.to_csv("/tmp/ind_legis_df_atualizado_13-prov-1.csv", index=False)
+    prov.to_csv("./temp/ind_legis_df_atualizado_13-prov-1.csv", index=False)
 
     # Peso 2 para presidente
     prov['cargos'] = np.where(prov['cargo'] == 'Presidente', 2, 1)
-    prov.to_csv("/tmp/ind_legis_df_atualizado_13-prov-2.csv", index=False)
+    prov.to_csv("./temp/ind_legis_df_atualizado_13-prov-2.csv", index=False)
 
     # Atualizar a pontuação com base nas comissões
     prov['nomePublicacaoOrgao'] = prov['nomePublicacaoOrgao'].astype(str)
@@ -967,7 +1053,7 @@ def calcula_var_13(cargos_deputados_df, ind_legis_df):
     prov = prov.groupby(['legislat', 'idDeputadoAutor']).agg({'cargos': 'sum'}).reset_index()
     prov = prov.rename(columns={'idDeputadoAutor': 'idDeputado'})
     prov['legislat'] = prov['legislat'].astype('int64')
-    prov.to_csv("/tmp/ind_legis_df_atualizado_13-prov-3.csv", index=False)
+    prov.to_csv("./temp/ind_legis_df_atualizado_13-prov-3.csv", index=False)
     # Fazer a junção com ind_legis_df
     ind_legis_df = ind_legis_df.merge(prov, on=['legislat', 'idDeputado'], how='left')
     ind_legis_df = ind_legis_df.fillna(0)
@@ -1414,7 +1500,7 @@ def atribuir_estrelas(final_ind_legis_57):
     final_ind_legis_57.loc[(final_ind_legis_57['rank'] > score_st) & (final_ind_legis_57['rank'] <= score_st * 2.5), 'estrelas'] = 4
     final_ind_legis_57.loc[(final_ind_legis_57['rank'] > score_st * 2.5) & (final_ind_legis_57['rank'] <= score_st * 4.5), 'estrelas'] = 3
     final_ind_legis_57.loc[(final_ind_legis_57['rank'] > score_st * 4.5) & (final_ind_legis_57['rank'] <= score_st * 7.5), 'estrelas'] = 2
-    final_ind_legis_57.to_csv("/tmp/final_ind_legis_57-rank.csv", index=False)
+    final_ind_legis_57.to_csv("./temp/final_ind_legis_57-rank.csv", index=False)
 
     # Remove colunas temporárias
     final_ind_legis_57.drop(columns=['rank'], inplace=True)
@@ -1560,173 +1646,193 @@ def pegar_info_deputados(df):
     return df
 
 
-# deputados
-deputados_df = pegar_deputados()
-deputados_df.to_csv("/tmp/deputados_df.csv", index=False)
+def main():
+    """Função principal do script"""
+    global nocache
+    
+    # Configurar argumentos da linha de comando
+    ano_atual_default = datetime.now().year
+    parser = argparse.ArgumentParser(description='Gerar CSVs de dados da Câmara dos Deputados')
+    parser.add_argument('--ano-atual', type=int, default=ano_atual_default, help=f'Ano atual para coleta de dados (padrão: {ano_atual_default})')
+    parser.add_argument('--ano-ini-legis', type=int, default=2023, help='Ano inicial da legislatura (padrão: 2023)')
+    parser.add_argument('--mes', type=str, default="", help='Mês para filtrar dados (formato: 01-12, padrão: sem filtro)')
+    parser.add_argument('--nocache', action='store_true', help='Forçar download de todos os arquivos, ignorando cache')
+    
+    args = parser.parse_args()
+    ano_atual = args.ano_atual
+    ano_ini_legis = args.ano_ini_legis
+    mes = args.mes
+    nocache = args.nocache
+    
+    print(f"Executando com ano_atual={ano_atual}, ano_ini_legis={ano_ini_legis}, mes={mes if mes else 'todos'}, nocache={nocache}")
+    
+    # deputados
+    deputados_df = pegar_deputados()
+    deputados_df.to_csv("./temp/deputados_df.csv", index=False)
+    
+    # proposições
+    proposicoes_df = pegar_proposicoes(ano_atual, ano_ini_legis, mes=mes)
+    proposicoes_df.to_csv("./temp/proposicoes_df.csv", index=False)
+    # def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
+    
+    # # autores
+    # autores_prop_df = pegar_autores_proposicoes(ano_atual, ano_ini_legis)
+    # autores_prop_df.to_csv("./temp/autores_prop_df.csv", index=False)
 
-# proposições
-proposicoes_df = pegar_proposicoes(ano_atual, ano_ini_legis)
-proposicoes_df.to_csv("/tmp/proposicoes_df.csv", index=False)
+    # # temas
+    # temas_prop_df = pegar_temas_proposicoes(ano_atual, ano_ini_legis)
+    # temas_prop_df.to_csv("./temp/temas_prop_df.csv", index=False)
 
-# autores
-autores_prop_df = pegar_autores_proposicoes(ano_atual, ano_ini_legis)
-autores_prop_df.to_csv("/tmp/autores_prop_df.csv", index=False)
-
-# temas
-temas_prop_df = pegar_temas_proposicoes(ano_atual, ano_ini_legis)
-temas_prop_df.to_csv("/tmp/temas_prop_df.csv", index=False)
-
-# eventos
-eventos_df = pegar_eventos(ano_atual, ano_ini_legis)
-eventos_df.to_csv("/tmp/eventos_df.csv", index=False)
-
-# presença em eventos
-dep_eventos_df = pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis)
-dep_eventos_df.to_csv("/tmp/dep_eventos_df.csv", index=False)
-
-# requerimentos dos eventos
-requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis)
-requer_eventos_df.to_csv("/tmp/requer_eventos_df.csv", index=False)
-
-# votações
-votacoes_df = pegar_votacoes(ano_atual, ano_ini_legis)
-votacoes_df.to_csv("/tmp/votacoes_df.csv", index=False)
-
-# votações por deputado
-dep_votacoes_df = pegar_votacoes_deputados(ano_atual, ano_ini_legis)
-dep_votacoes_df.to_csv("/tmp/dep_votacoes_df.csv", index=False)
-
-# votações e orientações dos líderes
-part_votacoes_df = pegar_votacoes_orientacoes(ano_atual, ano_ini_legis)
-part_votacoes_df.to_csv("/tmp/part_votacoes_df.csv", index=False)
-
-# cargos dos deputados
-cargos_deputados_df = pegar_cargos_deputados(57)
-cargos_deputados_df.to_csv("/tmp/cargos_deputados_df.csv", index=False)
-
-# órgãos
-orgaos_df = pegar_orgaos()
-orgaos_df.to_csv("/tmp/orgaos_df.csv", index=False)
-
-# índice legislativo
-ind_legis_df = criar_indice_legislativo(dep_eventos_df, dep_votacoes_df)
-ind_legis_df.to_csv("/tmp/ind_legis_df.csv", index=False)
-
-# proposições filtradas
-proposicoes_df_filtrado = processar_proposicoes(proposicoes_df, temas_prop_df, autores_prop_df)
-proposicoes_df_filtrado.to_csv("/tmp/proposicoes_df_filtrado.csv", index=False)
-
-# índice legislativo com Var1
-ind_legis_df_atualizado_1 = calcula_var_1(proposicoes_df_filtrado, ind_legis_df)
-ind_legis_df_atualizado_1.to_csv("/tmp/ind_legis_df_atualizado_1.csv", index=False)
-
-# índice legislativo com Var2
-ind_legis_df_atualizado_2 = calcula_var_2(proposicoes_df_filtrado, ind_legis_df_atualizado_1)
-ind_legis_df_atualizado_2.to_csv("/tmp/ind_legis_df_atualizado_2.csv", index=False)
-
-# calcula_var_3
-ind_legis_df_atualizado_3 = calcula_var_3(proposicoes_df_filtrado, ind_legis_df_atualizado_2)
-ind_legis_df_atualizado_3.to_csv("/tmp/ind_legis_df_atualizado_3.csv")
+    # # eventos
+    # eventos_df = pegar_eventos(ano_atual, ano_ini_legis)
+    # eventos_df.to_csv("./temp/eventos_df.csv", index=False)
 
 
-# calcula_var_4
-ind_legis_df_atualizado_4 = calcula_var_4(proposicoes_df_filtrado, ind_legis_df_atualizado_3)
-ind_legis_df_atualizado_4.to_csv("/tmp/ind_legis_df_atualizado_4.csv", index=False)
+if __name__ == "__main__":
+    main()
+
+    # # presença em eventos
+    # dep_eventos_df = pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis)
+    # dep_eventos_df.to_csv("./temp/dep_eventos_df.csv", index=False)
+
+    # # requerimentos dos eventos
+    # requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis)
+    # requer_eventos_df.to_csv("./temp/requer_eventos_df.csv", index=False)
+
+    # # votações
+    # votacoes_df = pegar_votacoes(ano_atual, ano_ini_legis)
+    # votacoes_df.to_csv("./temp/votacoes_df.csv", index=False)
+
+    # # votações por deputado
+    # dep_votacoes_df = pegar_votacoes_deputados(ano_atual, ano_ini_legis)
+    # dep_votacoes_df.to_csv("./temp/dep_votacoes_df.csv", index=False)
+
+    # # votações e orientações dos líderes
+    # part_votacoes_df = pegar_votacoes_orientacoes(ano_atual, ano_ini_legis)
+    # part_votacoes_df.to_csv("./temp/part_votacoes_df.csv", index=False)
+
+    # # cargos dos deputados
+    # cargos_deputados_df = pegar_cargos_deputados(57)
+    # cargos_deputados_df.to_csv("./temp/cargos_deputados_df.csv", index=False)
+
+    # # órgãos
+    # orgaos_df = pegar_orgaos()
+    # orgaos_df.to_csv("./temp/orgaos_df.csv", index=False)
+
+    # # índice legislativo
+    # ind_legis_df = criar_indice_legislativo(dep_eventos_df, dep_votacoes_df)
+    # ind_legis_df.to_csv("./temp/ind_legis_df.csv", index=False)
+
+    # # proposições filtradas
+    # proposicoes_df_filtrado = processar_proposicoes(proposicoes_df, temas_prop_df, autores_prop_df)
+    # proposicoes_df_filtrado.to_csv("./temp/proposicoes_df_filtrado.csv", index=False)
+
+    # # índice legislativo com Var1
+    # ind_legis_df_atualizado_1 = calcula_var_1(proposicoes_df_filtrado, ind_legis_df)
+    # ind_legis_df_atualizado_1.to_csv("./temp/ind_legis_df_atualizado_1.csv", index=False)
+
+    # # índice legislativo com Var2
+    # ind_legis_df_atualizado_2 = calcula_var_2(proposicoes_df_filtrado, ind_legis_df_atualizado_1)
+    # ind_legis_df_atualizado_2.to_csv("./temp/ind_legis_df_atualizado_2.csv", index=False)
+
+    # # calcula_var_3
+    # ind_legis_df_atualizado_3 = calcula_var_3(proposicoes_df_filtrado, ind_legis_df_atualizado_2)
+    # ind_legis_df_atualizado_3.to_csv("./temp/ind_legis_df_atualizado_3.csv")
 
 
-# Exemplo de uso da Var5 (Votos em separado)
-ind_legis_df_atualizado_5 = calcula_var_5(proposicoes_df_filtrado, ind_legis_df_atualizado_4)
-ind_legis_df_atualizado_5.to_csv("/tmp/ind_legis_df_atualizado_5.csv", index=False)
-
-# Exemplo de uso da Var6 (Substitutivos)
-ind_legis_df_atualizado_6 = calcula_var_6(proposicoes_df_filtrado, ind_legis_df_atualizado_5)
-ind_legis_df_atualizado_6.to_csv("/tmp/ind_legis_df_atualizado_6.csv", index=False)
-
-# Exemplo de uso da Var7 (Relatorias)
-ind_legis_df_atualizado_7 = calcula_var_7(proposicoes_df_filtrado, ind_legis_df_atualizado_6)
-ind_legis_df_atualizado_7.to_csv("/tmp/ind_legis_df_atualizado_7.csv", index=False)
-
-# Exemplo de uso da Var8 (Presença em votações em Plenário)
-ind_legis_df_atualizado_8 = calcula_var_8(eventos_df, dep_eventos_df, ind_legis_df_atualizado_7)
-ind_legis_df_atualizado_8.to_csv("/tmp/ind_legis_df_atualizado_8.csv", index=False)
-
-# Exemplo de uso da Var9 (Emendas em plenário)
-ind_legis_df_atualizado_9 = calcula_var_9(proposicoes_df_filtrado, ind_legis_df_atualizado_8)
-ind_legis_df_atualizado_9.to_csv("/tmp/ind_legis_df_atualizado_9.csv", index=False)
-
-# Exemplo de uso da Var10 (Emendas às MPs)
-ind_legis_df_atualizado_10 = calcula_var_10(proposicoes_df_filtrado, ind_legis_df_atualizado_9)
-ind_legis_df_atualizado_10.to_csv("/tmp/ind_legis_df_atualizado_10.csv", index=False)
-
-# Exemplo de uso da Var11 (Emendas às LOA)
-ind_legis_df_atualizado_11 = calcula_var_11(proposicoes_df_filtrado, ind_legis_df_atualizado_10)
-ind_legis_df_atualizado_11.to_csv("/tmp/ind_legis_df_atualizado_11.csv", index=False)
-
-# Exemplo de uso da Var12 (Projetos com status especial)
-ind_legis_df_atualizado_12 = calcula_var_12(proposicoes_df_filtrado, ind_legis_df_atualizado_11)
-ind_legis_df_atualizado_12.to_csv("/tmp/ind_legis_df_atualizado_12.csv", index=False)
-
-# Exemplo de uso da Var13 (Cargos ocupados)
-ind_legis_df_atualizado_13 = calcula_var_13(cargos_deputados_df, ind_legis_df_atualizado_12)
-ind_legis_df_atualizado_13.to_csv("/tmp/ind_legis_df_atualizado_13.csv", index=False)
-# Exemplo de uso da Var14 (Requerimentos de Audiência Pública)
-
-ind_legis_df_atualizado_14 = calcula_var_14(eventos_df, requer_eventos_df, proposicoes_df_filtrado, ind_legis_df_atualizado_13)
-ind_legis_df_atualizado_14.to_csv("/tmp/ind_legis_df_atualizado_14.csv", index=False)
-
-# Exemplo de uso da Var15 (Reuniões e eventos técnicos)
-ind_legis_df_atualizado_15 = calcula_var_15(eventos_df, dep_eventos_df, ind_legis_df_atualizado_14)
-ind_legis_df_atualizado_15.to_csv("/tmp/ind_legis_df_atualizado_15.csv", index=False)
-
-ind_legis_df_atualizado_16_18 = calcula_var_16_17_18(proposicoes_df_filtrado, ind_legis_df_atualizado_15)
-ind_legis_df_atualizado_16_18.to_csv("/tmp/ind_legis_df_atualizado_16_18.csv", index=False)
-
-# votacoes_df = pd.read_csv('/tmp/votacoes_df.csv')
-# dep_votacoes_df = pd.read_csv('/tmp/dep_votacoes_df.csv')
-# deputados_df = pd.read_csv('/tmp/deputados_df.csv')
-# ind_legis_df_atualizado_16_18 = pd.read_csv('/tmp/ind_legis_df_atualizado_16_18.csv')
-# # # Exemplo de uso para calcular a variável Var19
-ind_legis_df_atualizado_19 = calcula_var_19(votacoes_df, dep_votacoes_df, ind_legis_df_atualizado_16_18)
-ind_legis_df_atualizado_19.to_csv("/tmp/ind_legis_df_atualizado_19.csv", index=False)
-# ind_legis_df_atualizado_19 = pd.read_csv('/tmp/ind_legis_df_atualizado_19.csv')
-
-# normaliza_indice
-ind_legis_df_normalizado = normaliza_indice(ind_legis_df_atualizado_19)
-ind_legis_df_normalizado.to_csv("/tmp/ind_legis_df_normalizado.csv", index=False)
-
-# calcular_notas_dos_eixos
-ind_legis_df_eixos = calcular_notas_dos_eixos(ind_legis_df_normalizado)
-ind_legis_df_eixos.to_csv("/tmp/ind_legis_df_eixos.csv", index=False)
-
-# ordenar_variaveis
-ind_legis_df_ordenado = ordenar_variaveis(ind_legis_df_eixos)
-ind_legis_df_ordenado.to_csv("/tmp/ind_legis_df_ordenado.csv", index=False)
+    # # calcula_var_4
+    # ind_legis_df_atualizado_4 = calcula_var_4(proposicoes_df_filtrado, ind_legis_df_atualizado_3)
+    # ind_legis_df_atualizado_4.to_csv("./temp/ind_legis_df_atualizado_4.csv", index=False)
 
 
-# adicionar_info_pessoais
-ind_legis_df_info_pessoal = adicionar_info_pessoais(ind_legis_df_ordenado, deputados_df)
-ind_legis_df_info_pessoal.to_csv("/tmp/ind_legis_df_info_pessoal.csv", index=False)
+    # # Exemplo de uso da Var5 (Votos em separado)
+    # ind_legis_df_atualizado_5 = calcula_var_5(proposicoes_df_filtrado, ind_legis_df_atualizado_4)
+    # ind_legis_df_atualizado_5.to_csv("./temp/ind_legis_df_atualizado_5.csv", index=False)
+
+    # # Exemplo de uso da Var6 (Substitutivos)
+    # ind_legis_df_atualizado_6 = calcula_var_6(proposicoes_df_filtrado, ind_legis_df_atualizado_5)
+    # ind_legis_df_atualizado_6.to_csv("./temp/ind_legis_df_atualizado_6.csv", index=False)
+
+    # # Exemplo de uso da Var7 (Relatorias)
+    # ind_legis_df_atualizado_7 = calcula_var_7(proposicoes_df_filtrado, ind_legis_df_atualizado_6)
+    # ind_legis_df_atualizado_7.to_csv("./temp/ind_legis_df_atualizado_7.csv", index=False)
+
+    # # Exemplo de uso da Var8 (Presença em votações em Plenário)
+    # ind_legis_df_atualizado_8 = calcula_var_8(eventos_df, dep_eventos_df, ind_legis_df_atualizado_7)
+    # ind_legis_df_atualizado_8.to_csv("./temp/ind_legis_df_atualizado_8.csv", index=False)
+
+    # # Exemplo de uso da Var9 (Emendas em plenário)
+    # ind_legis_df_atualizado_9 = calcula_var_9(proposicoes_df_filtrado, ind_legis_df_atualizado_8)
+    # ind_legis_df_atualizado_9.to_csv("./temp/ind_legis_df_atualizado_9.csv", index=False)
+
+    # # Exemplo de uso da Var10 (Emendas às MPs)
+    # ind_legis_df_atualizado_10 = calcula_var_10(proposicoes_df_filtrado, ind_legis_df_atualizado_9)
+    # ind_legis_df_atualizado_10.to_csv("./temp/ind_legis_df_atualizado_10.csv", index=False)
+
+    # # Exemplo de uso da Var11 (Emendas às LOA)
+    # ind_legis_df_atualizado_11 = calcula_var_11(proposicoes_df_filtrado, ind_legis_df_atualizado_10)
+    # ind_legis_df_atualizado_11.to_csv("./temp/ind_legis_df_atualizado_11.csv", index=False)
+
+    # # Exemplo de uso da Var12 (Projetos com status especial)
+    # ind_legis_df_atualizado_12 = calcula_var_12(proposicoes_df_filtrado, ind_legis_df_atualizado_11)
+    # ind_legis_df_atualizado_12.to_csv("./temp/ind_legis_df_atualizado_12.csv", index=False)
+
+    # # Exemplo de uso da Var13 (Cargos ocupados)
+    # ind_legis_df_atualizado_13 = calcula_var_13(cargos_deputados_df, ind_legis_df_atualizado_12)
+    # ind_legis_df_atualizado_13.to_csv("./temp/ind_legis_df_atualizado_13.csv", index=False)
+
+    # # Exemplo de uso da Var14 (Requerimentos de Audiência Pública)
+    # ind_legis_df_atualizado_14 = calcula_var_14(eventos_df, requer_eventos_df, proposicoes_df_filtrado, ind_legis_df_atualizado_13)
+    # ind_legis_df_atualizado_14.to_csv("./temp/ind_legis_df_atualizado_14.csv", index=False)
+
+    # # Exemplo de uso da Var15 (Reuniões e eventos técnicos)
+    # ind_legis_df_atualizado_15 = calcula_var_15(eventos_df, dep_eventos_df, ind_legis_df_atualizado_14)
+    # ind_legis_df_atualizado_15.to_csv("./temp/ind_legis_df_atualizado_15.csv", index=False)
+
+    # ind_legis_df_atualizado_16_18 = calcula_var_16_17_18(proposicoes_df_filtrado, ind_legis_df_atualizado_15)
+    # ind_legis_df_atualizado_16_18.to_csv("./temp/ind_legis_df_atualizado_16_18.csv", index=False)
+
+    # # # # Exemplo de uso para calcular a variável Var19
+    # ind_legis_df_atualizado_19 = calcula_var_19(votacoes_df, dep_votacoes_df, ind_legis_df_atualizado_16_18)
+    # ind_legis_df_atualizado_19.to_csv("./temp/ind_legis_df_atualizado_19.csv", index=False)
+
+    # # normaliza_indice
+    # ind_legis_df_normalizado = normaliza_indice(ind_legis_df_atualizado_19)
+    # ind_legis_df_normalizado.to_csv("./temp/ind_legis_df_normalizado.csv", index=False)
+
+    # # calcular_notas_dos_eixos
+    # ind_legis_df_eixos = calcular_notas_dos_eixos(ind_legis_df_normalizado)
+    # ind_legis_df_eixos.to_csv("./temp/ind_legis_df_eixos.csv", index=False)
+
+    # # ordenar_variaveis
+    # ind_legis_df_ordenado = ordenar_variaveis(ind_legis_df_eixos)
+    # ind_legis_df_ordenado.to_csv("./temp/ind_legis_df_ordenado.csv", index=False)
 
 
-# selecionar_variaveis
-ind_legis_df_selecionado = selecionar_variaveis(ind_legis_df_info_pessoal)
-ind_legis_df_selecionado.to_csv("/tmp/ind_legis_df_selecionado.csv", index=False)
+    # # adicionar_info_pessoais
+    # ind_legis_df_info_pessoal = adicionar_info_pessoais(ind_legis_df_ordenado, deputados_df)
+    # ind_legis_df_info_pessoal.to_csv("./temp/ind_legis_df_info_pessoal.csv", index=False)
 
 
-# arredondar_valores
-ind_legis_df_arredondado = arredondar_valores(ind_legis_df_selecionado)
-ind_legis_df_arredondado.to_csv("/tmp/ind_legis_df_arredondado.csv", index=False)
+    # # selecionar_variaveis
+    # ind_legis_df_selecionado = selecionar_variaveis(ind_legis_df_info_pessoal)
+    # ind_legis_df_selecionado.to_csv("./temp/ind_legis_df_selecionado.csv", index=False)
 
-# renomear_e_filtrar
-final_ind_legis_57 = renomear_e_filtrar(ind_legis_df_arredondado, legislatura_atual=57)
-final_ind_legis_57.to_csv("/tmp/final_ind_legis_57-filtrado.csv", index=False)
 
-final_ind_legis_57 = atribuir_estrelas(final_ind_legis_57)
-final_ind_legis_57.to_csv("/tmp/final_ind_legis_57-estrelas.csv", index=False)
+    # # arredondar_valores
+    # ind_legis_df_arredondado = arredondar_valores(ind_legis_df_selecionado)
+    # ind_legis_df_arredondado.to_csv("./temp/ind_legis_df_arredondado.csv", index=False)
 
-# Garantir as UFs preenchidas
-final_ind_legis_57 = pegar_info_deputados(final_ind_legis_57)
+    # # renomear_e_filtrar
+    # final_ind_legis_57 = renomear_e_filtrar(ind_legis_df_arredondado, legislatura_atual=57)
+    # final_ind_legis_57.to_csv("./temp/final_ind_legis_57-filtrado.csv", index=False)
 
-# salvar csv
-final_ind_legis_57.to_csv("./final_ind_legis_57.csv", sep=';', decimal=',', index=False)
+    # final_ind_legis_57 = atribuir_estrelas(final_ind_legis_57)
+    # final_ind_legis_57.to_csv("./temp/final_ind_legis_57-estrelas.csv", index=False)
+
+    # # Garantir as UFs preenchidas
+    # final_ind_legis_57 = pegar_info_deputados(final_ind_legis_57)
+
+    # # salvar csv
+    # final_ind_legis_57.to_csv("./final_ind_legis_57.csv", sep=';', decimal=',', index=False)
 
