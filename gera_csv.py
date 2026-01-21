@@ -261,7 +261,6 @@ def pegar_autores_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
             # Concatenar os dados baixados ao DataFrame principal
             autores_prop = pd.concat([autores_prop, data], ignore_index=True)
 
-        # Pausa de 10 segundos para evitar sobrecarga de requisições
     autores_prop['idDeputadoAutor'] =autores_prop['idDeputadoAutor'].fillna(0).astype(int)
     autores_prop['idDeputadoAutor'] = autores_prop['idDeputadoAutor'].astype('int64')
     return autores_prop
@@ -341,7 +340,6 @@ def pegar_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
                 # Caso contrário, concatena os novos dados ao DataFrame de eventos
                 eventos = pd.concat([eventos, data], ignore_index=True)
 
-        # Pausa de 10 segundos para evitar sobrecarga de requisições
     
     # Aplicar filtros finais
     if 'dataHoraInicio' in eventos.columns:
@@ -403,9 +401,18 @@ def pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"
     
     return dep_eventos
 
-def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", eventos_df=None):
     """
     Função que baixa os arquivos de requerimentos dos eventos para os anos entre o ano atual e o ano de início da legislatura.
+    
+    Parâmetros:
+    - ano_atual: Ano atual.
+    - ano_ini_legis: Ano inicial da legislatura.
+    - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
+    - eventos_df: DataFrame de eventos filtrados para garantir que apenas requerimentos de eventos válidos sejam mantidos (opcional).
+    
+    Retorna:
+    - DataFrame Pandas com os requerimentos dos eventos, filtrado se eventos_df for fornecido.
     """
     
     requer_eventos = pd.DataFrame()  # DataFrame vazio para acumular os requerimentos dos eventos
@@ -430,7 +437,12 @@ def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp"):
             # Concatenar os dados baixados ao DataFrame principal
             requer_eventos = pd.concat([requer_eventos, data], ignore_index=True)
 
-        # Pausa de 10 segundos para evitar sobrecarga de requisições
+    
+    # Filtrar apenas requerimentos de eventos válidos se eventos_df for fornecido
+    if eventos_df is not None and not eventos_df.empty and 'id' in eventos_df.columns:
+        eventos_validos = eventos_df['id'].unique()
+        requer_eventos = requer_eventos[requer_eventos['idEvento'].isin(eventos_validos)]
+    
     return requer_eventos
 
 def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
@@ -1831,15 +1843,15 @@ def main():
     temas_prop_df.to_csv("./temp/temas_prop_df.csv", index=False)
 
     # # eventos
-    eventos_df = pegar_eventos(ano_atual, ano_ini_legis,mes=mes)
+    eventos_df = pegar_eventos(ano_atual, ano_ini_legis, mes=mes)
     eventos_df.to_csv("./temp/eventos_df.csv", index=False)
 
     # presença em eventos
     dep_eventos_df = pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, mes=mes)
     dep_eventos_df.to_csv("./temp/dep_eventos_df.csv", index=False)
 
-    # requerimentos dos eventos
-    requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis)
+    # requerimentos dos eventos (filtrado por eventos válidos)
+    requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis, eventos_df=eventos_df)
     requer_eventos_df.to_csv("./temp/requer_eventos_df.csv", index=False)
 
     # votações
@@ -1862,124 +1874,124 @@ def main():
     orgaos_df = pegar_orgaos(ano_ini_legis, ano_atual, mes=mes)
     orgaos_df.to_csv("./temp/orgaos_df.csv", index=False)
 
+
+    # índice legislativo
+    ind_legis_df = criar_indice_legislativo(dep_eventos_df, dep_votacoes_df)
+    ind_legis_df.to_csv("./temp/ind_legis_df.csv", index=False)
+
+    # proposições filtradas
+    proposicoes_df_filtrado = processar_proposicoes(proposicoes_df, temas_prop_df, autores_prop_df)
+    proposicoes_df_filtrado.to_csv("./temp/proposicoes_df_filtrado.csv", index=False)
+
+    # índice legislativo com Var1
+    ind_legis_df_atualizado_1 = calcula_var_1(proposicoes_df_filtrado, ind_legis_df)
+    ind_legis_df_atualizado_1.to_csv("./temp/ind_legis_df_atualizado_1.csv", index=False)
+
+    # índice legislativo com Var2
+    ind_legis_df_atualizado_2 = calcula_var_2(proposicoes_df_filtrado, ind_legis_df_atualizado_1)
+    ind_legis_df_atualizado_2.to_csv("./temp/ind_legis_df_atualizado_2.csv", index=False)
+
+    # calcula_var_3
+    ind_legis_df_atualizado_3 = calcula_var_3(proposicoes_df_filtrado, ind_legis_df_atualizado_2)
+    ind_legis_df_atualizado_3.to_csv("./temp/ind_legis_df_atualizado_3.csv")
+
+
+    # calcula_var_4
+    ind_legis_df_atualizado_4 = calcula_var_4(proposicoes_df_filtrado, ind_legis_df_atualizado_3)
+    ind_legis_df_atualizado_4.to_csv("./temp/ind_legis_df_atualizado_4.csv", index=False)
+
+
+    # Exemplo de uso da Var5 (Votos em separado)
+    ind_legis_df_atualizado_5 = calcula_var_5(proposicoes_df_filtrado, ind_legis_df_atualizado_4)
+    ind_legis_df_atualizado_5.to_csv("./temp/ind_legis_df_atualizado_5.csv", index=False)
+
+    # Exemplo de uso da Var6 (Substitutivos)
+    ind_legis_df_atualizado_6 = calcula_var_6(proposicoes_df_filtrado, ind_legis_df_atualizado_5)
+    ind_legis_df_atualizado_6.to_csv("./temp/ind_legis_df_atualizado_6.csv", index=False)
+
+    # Exemplo de uso da Var7 (Relatorias)
+    ind_legis_df_atualizado_7 = calcula_var_7(proposicoes_df_filtrado, ind_legis_df_atualizado_6)
+    ind_legis_df_atualizado_7.to_csv("./temp/ind_legis_df_atualizado_7.csv", index=False)
+
+    # Exemplo de uso da Var8 (Presença em votações em Plenário)
+    ind_legis_df_atualizado_8 = calcula_var_8(eventos_df, dep_eventos_df, ind_legis_df_atualizado_7)
+    ind_legis_df_atualizado_8.to_csv("./temp/ind_legis_df_atualizado_8.csv", index=False)
+
+    # Exemplo de uso da Var9 (Emendas em plenário)
+    ind_legis_df_atualizado_9 = calcula_var_9(proposicoes_df_filtrado, ind_legis_df_atualizado_8)
+    ind_legis_df_atualizado_9.to_csv("./temp/ind_legis_df_atualizado_9.csv", index=False)
+
+    # Exemplo de uso da Var10 (Emendas às MPs)
+    ind_legis_df_atualizado_10 = calcula_var_10(proposicoes_df_filtrado, ind_legis_df_atualizado_9)
+    ind_legis_df_atualizado_10.to_csv("./temp/ind_legis_df_atualizado_10.csv", index=False)
+
+    # Exemplo de uso da Var11 (Emendas às LOA)
+    ind_legis_df_atualizado_11 = calcula_var_11(proposicoes_df_filtrado, ind_legis_df_atualizado_10)
+    ind_legis_df_atualizado_11.to_csv("./temp/ind_legis_df_atualizado_11.csv", index=False)
+
+    # Exemplo de uso da Var12 (Projetos com status especial)
+    ind_legis_df_atualizado_12 = calcula_var_12(proposicoes_df_filtrado, ind_legis_df_atualizado_11)
+    ind_legis_df_atualizado_12.to_csv("./temp/ind_legis_df_atualizado_12.csv", index=False)
+
+    # Exemplo de uso da Var13 (Cargos ocupados)
+    ind_legis_df_atualizado_13 = calcula_var_13(cargos_deputados_df, ind_legis_df_atualizado_12)
+    ind_legis_df_atualizado_13.to_csv("./temp/ind_legis_df_atualizado_13.csv", index=False)
+
+    # Exemplo de uso da Var14 (Requerimentos de Audiência Pública)
+    ind_legis_df_atualizado_14 = calcula_var_14(eventos_df, requer_eventos_df, proposicoes_df_filtrado, ind_legis_df_atualizado_13)
+    ind_legis_df_atualizado_14.to_csv("./temp/ind_legis_df_atualizado_14.csv", index=False)
+
+    # Exemplo de uso da Var15 (Reuniões e eventos técnicos)
+    ind_legis_df_atualizado_15 = calcula_var_15(eventos_df, dep_eventos_df, ind_legis_df_atualizado_14)
+    ind_legis_df_atualizado_15.to_csv("./temp/ind_legis_df_atualizado_15.csv", index=False)
+
+    ind_legis_df_atualizado_16_18 = calcula_var_16_17_18(proposicoes_df_filtrado, ind_legis_df_atualizado_15)
+    ind_legis_df_atualizado_16_18.to_csv("./temp/ind_legis_df_atualizado_16_18.csv", index=False)
+
+    # # # Exemplo de uso para calcular a variável Var19
+    ind_legis_df_atualizado_19 = calcula_var_19(votacoes_df, dep_votacoes_df, ind_legis_df_atualizado_16_18)
+    ind_legis_df_atualizado_19.to_csv("./temp/ind_legis_df_atualizado_19.csv", index=False)
+
+    # normaliza_indice
+    ind_legis_df_normalizado = normaliza_indice(ind_legis_df_atualizado_19)
+    ind_legis_df_normalizado.to_csv("./temp/ind_legis_df_normalizado.csv", index=False)
+
+    # calcular_notas_dos_eixos
+    ind_legis_df_eixos = calcular_notas_dos_eixos(ind_legis_df_normalizado)
+    ind_legis_df_eixos.to_csv("./temp/ind_legis_df_eixos.csv", index=False)
+
+    # ordenar_variaveis
+    ind_legis_df_ordenado = ordenar_variaveis(ind_legis_df_eixos)
+    ind_legis_df_ordenado.to_csv("./temp/ind_legis_df_ordenado.csv", index=False)
+
+
+    # adicionar_info_pessoais
+    ind_legis_df_info_pessoal = adicionar_info_pessoais(ind_legis_df_ordenado, deputados_df)
+    ind_legis_df_info_pessoal.to_csv("./temp/ind_legis_df_info_pessoal.csv", index=False)
+
+
+    # selecionar_variaveis
+    ind_legis_df_selecionado = selecionar_variaveis(ind_legis_df_info_pessoal)
+    ind_legis_df_selecionado.to_csv("./temp/ind_legis_df_selecionado.csv", index=False)
+
+
+    # arredondar_valores
+    ind_legis_df_arredondado = arredondar_valores(ind_legis_df_selecionado)
+    ind_legis_df_arredondado.to_csv("./temp/ind_legis_df_arredondado.csv", index=False)
+
+    # renomear_e_filtrar
+    final_ind_legis_57 = renomear_e_filtrar(ind_legis_df_arredondado, legislatura_atual=57)
+    final_ind_legis_57.to_csv("./temp/final_ind_legis_57-filtrado.csv", index=False)
+
+    final_ind_legis_57 = atribuir_estrelas(final_ind_legis_57)
+    final_ind_legis_57.to_csv("./temp/final_ind_legis_57-estrelas.csv", index=False)
+
+    # Garantir as UFs preenchidas
+    final_ind_legis_57 = pegar_info_deputados(final_ind_legis_57)
+
+    # salvar csv
+    final_ind_legis_57.to_csv("./final_ind_legis_57.csv", sep=';', decimal=',', index=False)
+
 if __name__ == "__main__":
     main()
-
-
-    # # índice legislativo
-    # ind_legis_df = criar_indice_legislativo(dep_eventos_df, dep_votacoes_df)
-    # ind_legis_df.to_csv("./temp/ind_legis_df.csv", index=False)
-
-    # # proposições filtradas
-    # proposicoes_df_filtrado = processar_proposicoes(proposicoes_df, temas_prop_df, autores_prop_df)
-    # proposicoes_df_filtrado.to_csv("./temp/proposicoes_df_filtrado.csv", index=False)
-
-    # # índice legislativo com Var1
-    # ind_legis_df_atualizado_1 = calcula_var_1(proposicoes_df_filtrado, ind_legis_df)
-    # ind_legis_df_atualizado_1.to_csv("./temp/ind_legis_df_atualizado_1.csv", index=False)
-
-    # # índice legislativo com Var2
-    # ind_legis_df_atualizado_2 = calcula_var_2(proposicoes_df_filtrado, ind_legis_df_atualizado_1)
-    # ind_legis_df_atualizado_2.to_csv("./temp/ind_legis_df_atualizado_2.csv", index=False)
-
-    # # calcula_var_3
-    # ind_legis_df_atualizado_3 = calcula_var_3(proposicoes_df_filtrado, ind_legis_df_atualizado_2)
-    # ind_legis_df_atualizado_3.to_csv("./temp/ind_legis_df_atualizado_3.csv")
-
-
-    # # calcula_var_4
-    # ind_legis_df_atualizado_4 = calcula_var_4(proposicoes_df_filtrado, ind_legis_df_atualizado_3)
-    # ind_legis_df_atualizado_4.to_csv("./temp/ind_legis_df_atualizado_4.csv", index=False)
-
-
-    # # Exemplo de uso da Var5 (Votos em separado)
-    # ind_legis_df_atualizado_5 = calcula_var_5(proposicoes_df_filtrado, ind_legis_df_atualizado_4)
-    # ind_legis_df_atualizado_5.to_csv("./temp/ind_legis_df_atualizado_5.csv", index=False)
-
-    # # Exemplo de uso da Var6 (Substitutivos)
-    # ind_legis_df_atualizado_6 = calcula_var_6(proposicoes_df_filtrado, ind_legis_df_atualizado_5)
-    # ind_legis_df_atualizado_6.to_csv("./temp/ind_legis_df_atualizado_6.csv", index=False)
-
-    # # Exemplo de uso da Var7 (Relatorias)
-    # ind_legis_df_atualizado_7 = calcula_var_7(proposicoes_df_filtrado, ind_legis_df_atualizado_6)
-    # ind_legis_df_atualizado_7.to_csv("./temp/ind_legis_df_atualizado_7.csv", index=False)
-
-    # # Exemplo de uso da Var8 (Presença em votações em Plenário)
-    # ind_legis_df_atualizado_8 = calcula_var_8(eventos_df, dep_eventos_df, ind_legis_df_atualizado_7)
-    # ind_legis_df_atualizado_8.to_csv("./temp/ind_legis_df_atualizado_8.csv", index=False)
-
-    # # Exemplo de uso da Var9 (Emendas em plenário)
-    # ind_legis_df_atualizado_9 = calcula_var_9(proposicoes_df_filtrado, ind_legis_df_atualizado_8)
-    # ind_legis_df_atualizado_9.to_csv("./temp/ind_legis_df_atualizado_9.csv", index=False)
-
-    # # Exemplo de uso da Var10 (Emendas às MPs)
-    # ind_legis_df_atualizado_10 = calcula_var_10(proposicoes_df_filtrado, ind_legis_df_atualizado_9)
-    # ind_legis_df_atualizado_10.to_csv("./temp/ind_legis_df_atualizado_10.csv", index=False)
-
-    # # Exemplo de uso da Var11 (Emendas às LOA)
-    # ind_legis_df_atualizado_11 = calcula_var_11(proposicoes_df_filtrado, ind_legis_df_atualizado_10)
-    # ind_legis_df_atualizado_11.to_csv("./temp/ind_legis_df_atualizado_11.csv", index=False)
-
-    # # Exemplo de uso da Var12 (Projetos com status especial)
-    # ind_legis_df_atualizado_12 = calcula_var_12(proposicoes_df_filtrado, ind_legis_df_atualizado_11)
-    # ind_legis_df_atualizado_12.to_csv("./temp/ind_legis_df_atualizado_12.csv", index=False)
-
-    # # Exemplo de uso da Var13 (Cargos ocupados)
-    # ind_legis_df_atualizado_13 = calcula_var_13(cargos_deputados_df, ind_legis_df_atualizado_12)
-    # ind_legis_df_atualizado_13.to_csv("./temp/ind_legis_df_atualizado_13.csv", index=False)
-
-    # # Exemplo de uso da Var14 (Requerimentos de Audiência Pública)
-    # ind_legis_df_atualizado_14 = calcula_var_14(eventos_df, requer_eventos_df, proposicoes_df_filtrado, ind_legis_df_atualizado_13)
-    # ind_legis_df_atualizado_14.to_csv("./temp/ind_legis_df_atualizado_14.csv", index=False)
-
-    # # Exemplo de uso da Var15 (Reuniões e eventos técnicos)
-    # ind_legis_df_atualizado_15 = calcula_var_15(eventos_df, dep_eventos_df, ind_legis_df_atualizado_14)
-    # ind_legis_df_atualizado_15.to_csv("./temp/ind_legis_df_atualizado_15.csv", index=False)
-
-    # ind_legis_df_atualizado_16_18 = calcula_var_16_17_18(proposicoes_df_filtrado, ind_legis_df_atualizado_15)
-    # ind_legis_df_atualizado_16_18.to_csv("./temp/ind_legis_df_atualizado_16_18.csv", index=False)
-
-    # # # # Exemplo de uso para calcular a variável Var19
-    # ind_legis_df_atualizado_19 = calcula_var_19(votacoes_df, dep_votacoes_df, ind_legis_df_atualizado_16_18)
-    # ind_legis_df_atualizado_19.to_csv("./temp/ind_legis_df_atualizado_19.csv", index=False)
-
-    # # normaliza_indice
-    # ind_legis_df_normalizado = normaliza_indice(ind_legis_df_atualizado_19)
-    # ind_legis_df_normalizado.to_csv("./temp/ind_legis_df_normalizado.csv", index=False)
-
-    # # calcular_notas_dos_eixos
-    # ind_legis_df_eixos = calcular_notas_dos_eixos(ind_legis_df_normalizado)
-    # ind_legis_df_eixos.to_csv("./temp/ind_legis_df_eixos.csv", index=False)
-
-    # # ordenar_variaveis
-    # ind_legis_df_ordenado = ordenar_variaveis(ind_legis_df_eixos)
-    # ind_legis_df_ordenado.to_csv("./temp/ind_legis_df_ordenado.csv", index=False)
-
-
-    # # adicionar_info_pessoais
-    # ind_legis_df_info_pessoal = adicionar_info_pessoais(ind_legis_df_ordenado, deputados_df)
-    # ind_legis_df_info_pessoal.to_csv("./temp/ind_legis_df_info_pessoal.csv", index=False)
-
-
-    # # selecionar_variaveis
-    # ind_legis_df_selecionado = selecionar_variaveis(ind_legis_df_info_pessoal)
-    # ind_legis_df_selecionado.to_csv("./temp/ind_legis_df_selecionado.csv", index=False)
-
-
-    # # arredondar_valores
-    # ind_legis_df_arredondado = arredondar_valores(ind_legis_df_selecionado)
-    # ind_legis_df_arredondado.to_csv("./temp/ind_legis_df_arredondado.csv", index=False)
-
-    # # renomear_e_filtrar
-    # final_ind_legis_57 = renomear_e_filtrar(ind_legis_df_arredondado, legislatura_atual=57)
-    # final_ind_legis_57.to_csv("./temp/final_ind_legis_57-filtrado.csv", index=False)
-
-    # final_ind_legis_57 = atribuir_estrelas(final_ind_legis_57)
-    # final_ind_legis_57.to_csv("./temp/final_ind_legis_57-estrelas.csv", index=False)
-
-    # # Garantir as UFs preenchidas
-    # final_ind_legis_57 = pegar_info_deputados(final_ind_legis_57)
-
-    # # salvar csv
-    # final_ind_legis_57.to_csv("./final_ind_legis_57.csv", sep=';', decimal=',', index=False)
 
