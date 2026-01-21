@@ -1992,6 +1992,7 @@ def main():
     # salvar csv
     final_ind_legis_57.to_csv("./final_ind_legis_57.csv", sep=';', decimal=',', index=False)
 
+
 if __name__ == "__main__":
     main()
 
