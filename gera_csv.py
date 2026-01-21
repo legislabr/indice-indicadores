@@ -433,7 +433,7 @@ def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp"):
         # Pausa de 10 segundos para evitar sobrecarga de requisições
     return requer_eventos
 
-def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de votações para os anos entre o ano atual e o ano de início da legislatura.
     
@@ -441,6 +441,7 @@ def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     - ano_atual: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
+    - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
     
     Retorna:
     - DataFrame Pandas com o conteúdo de todas as votações.
@@ -466,12 +467,30 @@ def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
 
             # Concatenar os dados baixados ao DataFrame principal
             votacoes = pd.concat([votacoes, data], ignore_index=True)
-    votacoes['aprovacao'] =votacoes['aprovacao'].fillna(0).astype(int)
+    
+    votacoes['aprovacao'] = votacoes['aprovacao'].fillna(0).astype(int)
     votacoes['aprovacao'] = votacoes['aprovacao'].astype('int64')
+    
+    # Aplicar filtros finais
+    if 'dataHoraRegistro' in votacoes.columns:
+        votacoes['dataHoraRegistro_temp'] = pd.to_datetime(votacoes['dataHoraRegistro'])
+        
+        # Filtrar por data inicial da legislatura
+        data_ini_legis = f"{ano_ini_legis}-01-01T00:00:00"
+        votacoes = votacoes[votacoes['dataHoraRegistro_temp'] >= data_ini_legis]
+        
+        # Filtrar até o final do mês especificado se mes foi fornecido
+        if mes:
+            from calendar import monthrange
+            ultimo_dia = monthrange(ano_atual, int(mes))[1]
+            data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+            votacoes = votacoes[votacoes['dataHoraRegistro_temp'] <= data_limite_str]
+        
+        votacoes = votacoes.drop(columns=['dataHoraRegistro_temp'])
 
     return votacoes
 
-def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de votações por deputado para os anos entre o ano atual e o ano de início da legislatura.
     
@@ -479,6 +498,7 @@ def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"):
     - ano_atual: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
+    - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
     
     Retorna:
     - DataFrame Pandas com o conteúdo de todas as votações por deputado.
@@ -503,6 +523,23 @@ def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"):
 
             # Concatenar os dados baixados ao DataFrame principal
             dep_votacoes = pd.concat([dep_votacoes, data], ignore_index=True)
+    
+    # Aplicar filtros finais
+    if 'dataHoraVoto' in dep_votacoes.columns:
+        dep_votacoes['dataHoraVoto_temp'] = pd.to_datetime(dep_votacoes['dataHoraVoto'])
+        
+        # Filtrar por data inicial da legislatura
+        data_ini_legis = f"{ano_ini_legis}-01-01T00:00:00"
+        dep_votacoes = dep_votacoes[dep_votacoes['dataHoraVoto_temp'] >= data_ini_legis]
+        
+        # Filtrar até o final do mês especificado se mes foi fornecido
+        if mes:
+            from calendar import monthrange
+            ultimo_dia = monthrange(ano_atual, int(mes))[1]
+            data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+            dep_votacoes = dep_votacoes[dep_votacoes['dataHoraVoto_temp'] <= data_limite_str]
+        
+        dep_votacoes = dep_votacoes.drop(columns=['dataHoraVoto_temp'])
     
     return dep_votacoes
 
@@ -1737,13 +1774,13 @@ def main():
     dep_eventos_df = pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, mes=mes)
     dep_eventos_df.to_csv("./temp/dep_eventos_df.csv", index=False)
 
+    # requerimentos dos eventos
+    requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis)
+    requer_eventos_df.to_csv("./temp/requer_eventos_df.csv", index=False)
+
 if __name__ == "__main__":
     main()
 
-
-    # # requerimentos dos eventos
-    # requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis)
-    # requer_eventos_df.to_csv("./temp/requer_eventos_df.csv", index=False)
 
     # # votações
     # votacoes_df = pegar_votacoes(ano_atual, ano_ini_legis)
