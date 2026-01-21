@@ -362,9 +362,18 @@ def pegar_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     
     return eventos
 
-def pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de presença em eventos dos deputados para os anos entre o ano atual e o ano de início da legislatura.
+    
+    Parâmetros:
+    - ano_atual: Ano atual.
+    - ano_ini_legis: Ano inicial da legislatura.
+    - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
+    - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
+    
+    Retorna:
+    - DataFrame Pandas com o conteúdo de presença em eventos dos deputados.
     """
     dep_eventos = pd.DataFrame()  # DataFrame vazio para acumular os dados de presença em eventos
     for ano in range(ano_ini_legis, ano_atual + 1):
@@ -374,6 +383,24 @@ def pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"
         if data is not None:
             data = data[['idEvento', 'dataHoraInicio', 'idDeputado']]
             dep_eventos = pd.concat([dep_eventos, data], ignore_index=True)
+    
+    # Aplicar filtros finais
+    if 'dataHoraInicio' in dep_eventos.columns:
+        dep_eventos['dataHoraInicio_temp'] = pd.to_datetime(dep_eventos['dataHoraInicio'])
+        
+        # Filtrar por data inicial da legislatura
+        data_ini_legis = f"{ano_ini_legis}-01-01T00:00:00"
+        dep_eventos = dep_eventos[dep_eventos['dataHoraInicio_temp'] >= data_ini_legis]
+        
+        # Filtrar até o final do mês especificado se mes foi fornecido
+        if mes:
+            from calendar import monthrange
+            ultimo_dia = monthrange(ano_atual, int(mes))[1]
+            data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+            dep_eventos = dep_eventos[dep_eventos['dataHoraInicio_temp'] <= data_limite_str]
+        
+        dep_eventos = dep_eventos.drop(columns=['dataHoraInicio_temp'])
+    
     return dep_eventos
 
 def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp"):
@@ -1706,13 +1733,13 @@ def main():
     eventos_df = pegar_eventos(ano_atual, ano_ini_legis,mes=mes)
     eventos_df.to_csv("./temp/eventos_df.csv", index=False)
 
+    # presença em eventos
+    dep_eventos_df = pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, mes=mes)
+    dep_eventos_df.to_csv("./temp/dep_eventos_df.csv", index=False)
 
 if __name__ == "__main__":
     main()
 
-    # # presença em eventos
-    # dep_eventos_df = pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis)
-    # dep_eventos_df.to_csv("./temp/dep_eventos_df.csv", index=False)
 
     # # requerimentos dos eventos
     # requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis)
