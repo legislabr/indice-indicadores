@@ -40,12 +40,12 @@ def baixar_csv_generico(nome_arquivo, url, pasta_temp="temp", ano = ""):
         os.makedirs(pasta_temp)
     
     # Definir o nome completo do arquivo baseado no ano atual
-    ano_atual = datetime.now().year
+    ano_final = datetime.now().year
 
     arquivo_csv = os.path.join(pasta_temp, f"{nome_arquivo}_{ano}.csv") if ano else os.path.join(pasta_temp, f"{nome_arquivo}.csv")
 
     # Verificar se o arquivo já existe, se tem ano e não é o ano atual, e nocache não está ativo
-    if os.path.exists(arquivo_csv) and ano != "" and ano != str(ano_atual) and not nocache:
+    if os.path.exists(arquivo_csv) and ano != "" and ano != str(ano_final) and not nocache:
         print(f"Arquivo já existe em: {arquivo_csv}")
         try :
             return pd.read_csv(arquivo_csv, sep=';', low_memory=False)
@@ -163,12 +163,12 @@ def pegar_deputados(pasta_temp="temp"):
 
     return data
 
-def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
+def pegar_proposicoes(ano_final, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de proposições para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
@@ -179,7 +179,7 @@ def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     
     proposicoes = pd.DataFrame()  # DataFrame vazio para acumular as proposições
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando proposições para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -199,12 +199,12 @@ def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
             data['ano.loop'] = ano
             data['dataApresentacao'] = pd.to_datetime(data['dataApresentacao'])
             
-            # Filtrar até o final do mês especificado no ano_atual
-            if mes and ano == ano_atual:
-                # Criar data limite: último dia do mês especificado no ano_atual
+            # Filtrar até o final do mês especificado no ano_final
+            if mes and ano == ano_final:
+                # Criar data limite: último dia do mês especificado no ano_final
                 from calendar import monthrange
-                ultimo_dia = monthrange(ano_atual, int(mes))[1]
-                data_limite = pd.Timestamp(year=ano_atual, month=int(mes), day=ultimo_dia, hour=23, minute=59, second=59)
+                ultimo_dia = monthrange(ano_final, int(mes))[1]
+                data_limite = pd.Timestamp(year=ano_final, month=int(mes), day=ultimo_dia, hour=23, minute=59, second=59)
                 data = data[data['dataApresentacao'] <= data_limite]
             
             data['dataApresentacao'] = data['dataApresentacao'].dt.strftime('%Y-%m-%dT%H:%M:%S')
@@ -214,8 +214,8 @@ def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     # Aplicar filtro final se mes foi especificado
     if mes:
         from calendar import monthrange
-        ultimo_dia = monthrange(ano_atual, int(mes))[1]
-        data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+        ultimo_dia = monthrange(ano_final, int(mes))[1]
+        data_limite_str = f"{ano_final}-{int(mes):02d}-{ultimo_dia}T23:59:59"
         proposicoes['dataApresentacao_temp'] = pd.to_datetime(proposicoes['dataApresentacao'])
         proposicoes = proposicoes[proposicoes['dataApresentacao_temp'] <= data_limite_str]
         proposicoes = proposicoes.drop(columns=['dataApresentacao_temp'])
@@ -229,12 +229,12 @@ def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     return proposicoes
 
 
-def pegar_autores_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_autores_proposicoes(ano_final, ano_ini_legis, pasta_temp="temp"):
     """
     Função que baixa os arquivos de autores das proposições para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     
@@ -244,7 +244,7 @@ def pegar_autores_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     
     autores_prop = pd.DataFrame()  # DataFrame vazio para acumular os autores das proposições
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando autores das proposições para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -266,12 +266,12 @@ def pegar_autores_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     return autores_prop
 
 
-def pegar_temas_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_temas_proposicoes(ano_final, ano_ini_legis, pasta_temp="temp"):
     """
     Função que baixa os arquivos de temas das proposições para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     
@@ -281,7 +281,7 @@ def pegar_temas_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     
     temas_prop = pd.DataFrame()  # DataFrame vazio para acumular os temas das proposições
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando temas das proposições para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -306,12 +306,12 @@ def pegar_temas_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     
     return temas_prop
 
-def pegar_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
+def pegar_eventos(ano_final, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de eventos para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
@@ -322,7 +322,7 @@ def pegar_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     
     eventos = pd.DataFrame()  # DataFrame vazio para acumular os eventos
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando eventos para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -352,20 +352,20 @@ def pegar_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
         # Filtrar até o final do mês especificado se mes foi fornecido
         if mes:
             from calendar import monthrange
-            ultimo_dia = monthrange(ano_atual, int(mes))[1]
-            data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+            ultimo_dia = monthrange(ano_final, int(mes))[1]
+            data_limite_str = f"{ano_final}-{int(mes):02d}-{ultimo_dia}T23:59:59"
             eventos = eventos[eventos['dataHoraInicio_temp'] <= data_limite_str]
         
         eventos = eventos.drop(columns=['dataHoraInicio_temp'])
     
     return eventos
 
-def pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
+def pegar_presenca_eventos_deputados(ano_final, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de presença em eventos dos deputados para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
@@ -374,7 +374,7 @@ def pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"
     - DataFrame Pandas com o conteúdo de presença em eventos dos deputados.
     """
     dep_eventos = pd.DataFrame()  # DataFrame vazio para acumular os dados de presença em eventos
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando presença de eventos para o ano {ano}...")
         url = f"http://dadosabertos.camara.leg.br/arquivos/eventosPresencaDeputados/csv/eventosPresencaDeputados-{ano}.csv"
         data = baixar_csv_generico(f"eventosPresencaDeputados", url, pasta_temp, str(ano))
@@ -393,20 +393,20 @@ def pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, pasta_temp="temp"
         # Filtrar até o final do mês especificado se mes foi fornecido
         if mes:
             from calendar import monthrange
-            ultimo_dia = monthrange(ano_atual, int(mes))[1]
-            data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+            ultimo_dia = monthrange(ano_final, int(mes))[1]
+            data_limite_str = f"{ano_final}-{int(mes):02d}-{ultimo_dia}T23:59:59"
             dep_eventos = dep_eventos[dep_eventos['dataHoraInicio_temp'] <= data_limite_str]
         
         dep_eventos = dep_eventos.drop(columns=['dataHoraInicio_temp'])
     
     return dep_eventos
 
-def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", eventos_df=None):
+def pegar_requerimentos_eventos(ano_final, ano_ini_legis, pasta_temp="temp", eventos_df=None):
     """
     Função que baixa os arquivos de requerimentos dos eventos para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     - eventos_df: DataFrame de eventos filtrados para garantir que apenas requerimentos de eventos válidos sejam mantidos (opcional).
@@ -417,7 +417,7 @@ def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", eve
     
     requer_eventos = pd.DataFrame()  # DataFrame vazio para acumular os requerimentos dos eventos
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando requerimentos dos eventos para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -445,12 +445,12 @@ def pegar_requerimentos_eventos(ano_atual, ano_ini_legis, pasta_temp="temp", eve
     
     return requer_eventos
 
-def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
+def pegar_votacoes(ano_final, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de votações para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
@@ -461,7 +461,7 @@ def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
     
     votacoes = pd.DataFrame()  # DataFrame vazio para acumular as votações
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando votações para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -494,20 +494,20 @@ def pegar_votacoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
         # Filtrar até o final do mês especificado se mes foi fornecido
         if mes:
             from calendar import monthrange
-            ultimo_dia = monthrange(ano_atual, int(mes))[1]
-            data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+            ultimo_dia = monthrange(ano_final, int(mes))[1]
+            data_limite_str = f"{ano_final}-{int(mes):02d}-{ultimo_dia}T23:59:59"
             votacoes = votacoes[votacoes['dataHoraRegistro_temp'] <= data_limite_str]
         
         votacoes = votacoes.drop(columns=['dataHoraRegistro_temp'])
 
     return votacoes
 
-def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
+def pegar_votacoes_deputados(ano_final, ano_ini_legis, pasta_temp="temp", mes=""):
     """
     Função que baixa os arquivos de votações por deputado para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - ano_ini_legis: Ano inicial da legislatura.
     - pasta_temp: Diretório onde os arquivos CSV serão salvos (padrão: 'temp').
     - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
@@ -518,7 +518,7 @@ def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""
     
     dep_votacoes = pd.DataFrame()  # DataFrame vazio para acumular as votações por deputado
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando votações por deputado para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -547,8 +547,8 @@ def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""
         # Filtrar até o final do mês especificado se mes foi fornecido
         if mes:
             from calendar import monthrange
-            ultimo_dia = monthrange(ano_atual, int(mes))[1]
-            data_limite_str = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}T23:59:59"
+            ultimo_dia = monthrange(ano_final, int(mes))[1]
+            data_limite_str = f"{ano_final}-{int(mes):02d}-{ultimo_dia}T23:59:59"
             dep_votacoes = dep_votacoes[dep_votacoes['dataHoraVoto_temp'] <= data_limite_str]
         
         dep_votacoes = dep_votacoes.drop(columns=['dataHoraVoto_temp'])
@@ -556,14 +556,14 @@ def pegar_votacoes_deputados(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""
     return dep_votacoes
 
 
-def pegar_votacoes_orientacoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
+def pegar_votacoes_orientacoes(ano_final, ano_ini_legis, pasta_temp="temp"):
     """
     Função que baixa os arquivos de votações e orientação dos líderes para os anos entre o ano atual e o ano de início da legislatura.
     """
     
     votacoes_orientacoes = pd.DataFrame()  # DataFrame vazio para acumular as votações e orientações
 
-    for ano in range(ano_ini_legis, ano_atual + 1):
+    for ano in range(ano_ini_legis, ano_final + 1):
         print(f"Baixando votações e orientações para o ano {ano}...")
 
         # Construir a URL para o ano específico
@@ -586,14 +586,14 @@ def pegar_votacoes_orientacoes(ano_atual, ano_ini_legis, pasta_temp="temp"):
     return votacoes_orientacoes
 
 
-def pegar_cargos_deputados(legislatura, ano_ini_legis, ano_atual, mes=""):
+def pegar_cargos_deputados(legislatura, ano_ini_legis, ano_final, mes=""):
     """
     Função que baixa os arquivos de cargos dos deputados para os anos entre o ano atual e o ano de início da legislatura.
     
     Parâmetros:
     - legislatura: Número da legislatura.
     - ano_ini_legis: Ano inicial da legislatura.
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
     
     Retorna:
@@ -626,10 +626,10 @@ def pegar_cargos_deputados(legislatura, ano_ini_legis, ano_atual, mes=""):
         
         if mes:
             from calendar import monthrange
-            ultimo_dia = monthrange(ano_atual, int(mes))[1]
-            data_fim_periodo = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}"
+            ultimo_dia = monthrange(ano_final, int(mes))[1]
+            data_fim_periodo = f"{ano_final}-{int(mes):02d}-{ultimo_dia}"
         else:
-            data_fim_periodo = f"{ano_atual}-12-31"
+            data_fim_periodo = f"{ano_final}-12-31"
         
         # Converter datas para datetime
         dep_cargo['dataInicio_temp'] = pd.to_datetime(dep_cargo['dataInicio'])
@@ -647,13 +647,13 @@ def pegar_cargos_deputados(legislatura, ano_ini_legis, ano_atual, mes=""):
 
     return dep_cargo
 
-def pegar_orgaos(ano_ini_legis, ano_atual, pasta_temp="temp", mes=""):
+def pegar_orgaos(ano_ini_legis, ano_final, pasta_temp="temp", mes=""):
     """
     Função que baixa e processa o arquivo de órgãos.
     
     Parâmetros:
     - ano_ini_legis: Ano inicial da legislatura.
-    - ano_atual: Ano atual.
+    - ano_final: Ano atual.
     - pasta_temp: Diretório onde o arquivo CSV será salvo (padrão: 'temp').
     - mes: Mês para filtrar até o final (formato: 01-12, padrão: vazio).
     
@@ -675,10 +675,10 @@ def pegar_orgaos(ano_ini_legis, ano_atual, pasta_temp="temp", mes=""):
         
         if mes:
             from calendar import monthrange
-            ultimo_dia = monthrange(ano_atual, int(mes))[1]
-            data_fim_periodo = f"{ano_atual}-{int(mes):02d}-{ultimo_dia}"
+            ultimo_dia = monthrange(ano_final, int(mes))[1]
+            data_fim_periodo = f"{ano_final}-{int(mes):02d}-{ultimo_dia}"
         else:
-            data_fim_periodo = f"{ano_atual}-12-31"
+            data_fim_periodo = f"{ano_final}-12-31"
         
         # Converter datas para datetime
         orgaos['dataInicio_temp'] = pd.to_datetime(orgaos['dataInicio'])
@@ -1810,68 +1810,68 @@ def main():
     global nocache
     
     # Configurar argumentos da linha de comando
-    ano_atual_default = datetime.now().year
+    ano_final_default = datetime.now().year
     parser = argparse.ArgumentParser(description='Gerar CSVs de dados da Câmara dos Deputados')
-    parser.add_argument('--ano-atual', type=int, default=ano_atual_default, help=f'Ano atual para coleta de dados (padrão: {ano_atual_default})')
+    parser.add_argument('--ano-final', type=int, default=ano_final_default, help=f'Ano atual para coleta de dados (padrão: {ano_final_default})')
     parser.add_argument('--ano-ini-legis', type=int, default=2023, help='Ano inicial da legislatura (padrão: 2023)')
     parser.add_argument('--mes', type=str, default="", help='Mês para filtrar dados (formato: 01-12, padrão: sem filtro)')
     parser.add_argument('--nocache', action='store_true', help='Forçar download de todos os arquivos, ignorando cache')
     
     args = parser.parse_args()
-    ano_atual = args.ano_atual
+    ano_final = args.ano_final
     ano_ini_legis = args.ano_ini_legis
     mes = args.mes
     nocache = args.nocache
     
-    print(f"Executando com ano_atual={ano_atual}, ano_ini_legis={ano_ini_legis}, mes={mes if mes else 'todos'}, nocache={nocache}")
+    print(f"Executando com ano_final={ano_final}, ano_ini_legis={ano_ini_legis}, mes={mes if mes else 'todos'}, nocache={nocache}")
     
     # deputados
     deputados_df = pegar_deputados()
     deputados_df.to_csv("./temp/deputados_df.csv", index=False)
     
     # proposições
-    proposicoes_df = pegar_proposicoes(ano_atual, ano_ini_legis, mes=mes)
+    proposicoes_df = pegar_proposicoes(ano_final, ano_ini_legis, mes=mes)
     proposicoes_df.to_csv("./temp/proposicoes_df.csv", index=False)
-    # def pegar_proposicoes(ano_atual, ano_ini_legis, pasta_temp="temp", mes=""):
+    # def pegar_proposicoes(ano_final, ano_ini_legis, pasta_temp="temp", mes=""):
     
     # # autores
-    autores_prop_df = pegar_autores_proposicoes(ano_atual, ano_ini_legis)
+    autores_prop_df = pegar_autores_proposicoes(ano_final, ano_ini_legis)
     autores_prop_df.to_csv("./temp/autores_prop_df.csv", index=False)
 
     # # temas
-    temas_prop_df = pegar_temas_proposicoes(ano_atual, ano_ini_legis)
+    temas_prop_df = pegar_temas_proposicoes(ano_final, ano_ini_legis)
     temas_prop_df.to_csv("./temp/temas_prop_df.csv", index=False)
 
     # # eventos
-    eventos_df = pegar_eventos(ano_atual, ano_ini_legis, mes=mes)
+    eventos_df = pegar_eventos(ano_final, ano_ini_legis, mes=mes)
     eventos_df.to_csv("./temp/eventos_df.csv", index=False)
 
     # presença em eventos
-    dep_eventos_df = pegar_presenca_eventos_deputados(ano_atual, ano_ini_legis, mes=mes)
+    dep_eventos_df = pegar_presenca_eventos_deputados(ano_final, ano_ini_legis, mes=mes)
     dep_eventos_df.to_csv("./temp/dep_eventos_df.csv", index=False)
 
     # requerimentos dos eventos (filtrado por eventos válidos)
-    requer_eventos_df = pegar_requerimentos_eventos(ano_atual, ano_ini_legis, eventos_df=eventos_df)
+    requer_eventos_df = pegar_requerimentos_eventos(ano_final, ano_ini_legis, eventos_df=eventos_df)
     requer_eventos_df.to_csv("./temp/requer_eventos_df.csv", index=False)
 
     # votações
-    votacoes_df = pegar_votacoes(ano_atual, ano_ini_legis, mes=mes)
+    votacoes_df = pegar_votacoes(ano_final, ano_ini_legis, mes=mes)
     votacoes_df.to_csv("./temp/votacoes_df.csv", index=False)
 
     # votações por deputado
-    dep_votacoes_df = pegar_votacoes_deputados(ano_atual, ano_ini_legis, mes=mes)
+    dep_votacoes_df = pegar_votacoes_deputados(ano_final, ano_ini_legis, mes=mes)
     dep_votacoes_df.to_csv("./temp/dep_votacoes_df.csv", index=False)
 
     # votações e orientações dos líderes
-    part_votacoes_df = pegar_votacoes_orientacoes(ano_atual, ano_ini_legis)
+    part_votacoes_df = pegar_votacoes_orientacoes(ano_final, ano_ini_legis)
     part_votacoes_df.to_csv("./temp/part_votacoes_df.csv", index=False)
 
     # cargos dos deputados
-    cargos_deputados_df = pegar_cargos_deputados(57, ano_ini_legis, ano_atual, mes=mes)
+    cargos_deputados_df = pegar_cargos_deputados(57, ano_ini_legis, ano_final, mes=mes)
     cargos_deputados_df.to_csv("./temp/cargos_deputados_df.csv", index=False)
 
     # órgãos
-    orgaos_df = pegar_orgaos(ano_ini_legis, ano_atual, mes=mes)
+    orgaos_df = pegar_orgaos(ano_ini_legis, ano_final, mes=mes)
     orgaos_df.to_csv("./temp/orgaos_df.csv", index=False)
 
 
