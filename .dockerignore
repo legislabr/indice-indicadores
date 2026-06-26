@@ -1,0 +1,13 @@
+.git
+__pycache__
+data
+temp
+temp-bkp
+temp2
+logs
+cache_api
+*.csv
+.env
+docker-compose.yml
+docker-compose-prod.yaml
+.venv

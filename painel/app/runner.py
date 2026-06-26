@@ -19,7 +19,7 @@ _guard = asyncio.Lock()
 
 def _logs_dir() -> Path:
     d = DATA / "logs"
-    d.makedirs(parents=True, exist_ok=True)
+    d.mkdir(parents=True, exist_ok=True)
     return d
 
 

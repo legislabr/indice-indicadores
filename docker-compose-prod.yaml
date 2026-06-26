@@ -17,7 +17,7 @@ services:
       - DATA_DIR=/data
       - SCRIPT_PATH=/app/scripts/gera_csv.py
       - PAINEL_SECRET_KEY=${PAINEL_SECRET_KEY}
-      - PAINEL_SENHA_HASH=${PAINEL_SENHA_HASH}
+      - PAINEL_SENHA_HASH_B64=${PAINEL_SENHA_HASH_B64}
       - LEGISLATURA_ATUAL=${LEGISLATURA_ATUAL:-57}
     volumes:
       - ./data:/data
