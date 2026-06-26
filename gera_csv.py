@@ -1645,27 +1645,27 @@ def renomear_e_filtrar(final_ind_legis_df, legislatura_atual=57):
 
     return final_ind_legis_atual
 
-def atribuir_estrelas(final_ind_legis_57):
+def atribuir_estrelas(final_ind_legis_df, legislatura_atual=57):
     # Cria uma cópia do DataFrame para evitar modificações no original
-    final_ind_legis_57 = final_ind_legis_57.copy()
+    final_ind_legis_df = final_ind_legis_df.copy()
     
     # Calcula o rank inverso do 'Score final'
-    final_ind_legis_57['rank'] = final_ind_legis_57['score_final'].rank(ascending=False)
+    final_ind_legis_df['rank'] = final_ind_legis_df['score_final'].rank(ascending=False)
     score_st = 50  # Define o limite de pontuação para as estrelas
     
     # Atribui estrelas com base na classificação (rank)
-    final_ind_legis_57['estrelas'] = 1  # Inicia com 1 estrela
-    final_ind_legis_57.loc[final_ind_legis_57['rank'] <= score_st, 'estrelas'] = 5
-    final_ind_legis_57.loc[(final_ind_legis_57['rank'] > score_st) & (final_ind_legis_57['rank'] <= score_st * 2.5), 'estrelas'] = 4
-    final_ind_legis_57.loc[(final_ind_legis_57['rank'] > score_st * 2.5) & (final_ind_legis_57['rank'] <= score_st * 4.5), 'estrelas'] = 3
-    final_ind_legis_57.loc[(final_ind_legis_57['rank'] > score_st * 4.5) & (final_ind_legis_57['rank'] <= score_st * 7.5), 'estrelas'] = 2
-    final_ind_legis_57.to_csv("./temp/final_ind_legis_57-rank.csv", index=False)
+    final_ind_legis_df['estrelas'] = 1  # Inicia com 1 estrela
+    final_ind_legis_df.loc[final_ind_legis_df['rank'] <= score_st, 'estrelas'] = 5
+    final_ind_legis_df.loc[(final_ind_legis_df['rank'] > score_st) & (final_ind_legis_df['rank'] <= score_st * 2.5), 'estrelas'] = 4
+    final_ind_legis_df.loc[(final_ind_legis_df['rank'] > score_st * 2.5) & (final_ind_legis_df['rank'] <= score_st * 4.5), 'estrelas'] = 3
+    final_ind_legis_df.loc[(final_ind_legis_df['rank'] > score_st * 4.5) & (final_ind_legis_df['rank'] <= score_st * 7.5), 'estrelas'] = 2
+    final_ind_legis_df.to_csv(f"./temp/final_ind_legis_{legislatura_atual}-rank.csv", index=False)
 
     # Remove colunas temporárias
-    final_ind_legis_57.drop(columns=['rank'], inplace=True)
-    final_ind_legis_57.loc[(final_ind_legis_57['score_final'] < 7.5) & (final_ind_legis_57['estrelas'] == 5), 'estrelas'] = 4
+    final_ind_legis_df.drop(columns=['rank'], inplace=True)
+    final_ind_legis_df.loc[(final_ind_legis_df['score_final'] < 7.5) & (final_ind_legis_df['estrelas'] == 5), 'estrelas'] = 4
     
-    return final_ind_legis_57
+    return final_ind_legis_df
 
 def pegar_sigla_uf_deputado(deputado_id):
     url = f"https://dadosabertos.camara.leg.br/api/v2/deputados/{deputado_id}"
@@ -1814,16 +1814,18 @@ def main():
     parser = argparse.ArgumentParser(description='Gerar CSVs de dados da Câmara dos Deputados')
     parser.add_argument('--ano-final', type=int, default=ano_final_default, help=f'Ano atual para coleta de dados (padrão: {ano_final_default})')
     parser.add_argument('--ano-ini-legis', type=int, default=2023, help='Ano inicial da legislatura (padrão: 2023)')
+    parser.add_argument('--legislatura-atual', type=int, default=57, help='Número da legislatura para filtrar e exportar (padrão: 57)')
     parser.add_argument('--mes', type=str, default="", help='Mês para filtrar dados (formato: 01-12, padrão: sem filtro)')
     parser.add_argument('--nocache', action='store_true', help='Forçar download de todos os arquivos, ignorando cache')
     
     args = parser.parse_args()
     ano_final = args.ano_final
     ano_ini_legis = args.ano_ini_legis
+    legislatura_atual = args.legislatura_atual
     mes = args.mes
     nocache = args.nocache
     
-    print(f"Executando com ano_final={ano_final}, ano_ini_legis={ano_ini_legis}, mes={mes if mes else 'todos'}, nocache={nocache}")
+    print(f"Executando com ano_final={ano_final}, ano_ini_legis={ano_ini_legis}, legislatura_atual={legislatura_atual}, mes={mes if mes else 'todos'}, nocache={nocache}")
     
     # deputados
     deputados_df = pegar_deputados()
@@ -1867,7 +1869,7 @@ def main():
     part_votacoes_df.to_csv("./temp/part_votacoes_df.csv", index=False)
 
     # cargos dos deputados
-    cargos_deputados_df = pegar_cargos_deputados(57, ano_ini_legis, ano_final, mes=mes)
+    cargos_deputados_df = pegar_cargos_deputados(legislatura_atual, ano_ini_legis, ano_final, mes=mes)
     cargos_deputados_df.to_csv("./temp/cargos_deputados_df.csv", index=False)
 
     # órgãos
@@ -1980,19 +1982,24 @@ def main():
     ind_legis_df_arredondado.to_csv("./temp/ind_legis_df_arredondado.csv", index=False)
 
     # renomear_e_filtrar
-    final_ind_legis_57 = renomear_e_filtrar(ind_legis_df_arredondado, legislatura_atual=57)
-    final_ind_legis_57.to_csv("./temp/final_ind_legis_57-filtrado.csv", index=False)
+    final_ind_legis_filtrado = renomear_e_filtrar(ind_legis_df_arredondado, legislatura_atual=legislatura_atual)
+    final_ind_legis_filtrado.to_csv(f"./temp/final_ind_legis_{legislatura_atual}-filtrado.csv", index=False)
 
-    final_ind_legis_57 = atribuir_estrelas(final_ind_legis_57)
-    final_ind_legis_57.to_csv("./temp/final_ind_legis_57-estrelas.csv", index=False)
+    final_ind_legis_filtrado = atribuir_estrelas(final_ind_legis_filtrado, legislatura_atual=legislatura_atual)
+    final_ind_legis_filtrado.to_csv(f"./temp/final_ind_legis_{legislatura_atual}-estrelas.csv", index=False)
 
     # Garantir as UFs preenchidas
-    final_ind_legis_57 = pegar_info_deputados(final_ind_legis_57)
+    final_ind_legis_filtrado = pegar_info_deputados(final_ind_legis_filtrado)
 
     # salvar csv
-    final_ind_legis_57.to_csv("./final_ind_legis_57.csv", sep=';', decimal=',', index=False)
+    # Sufixo de período no nome: mantém vários recortes sem sobrescrever.
+    # Ex.: final_ind_legis_57_ate_2025-04.csv  (com --mes)
+    #      final_ind_legis_57_ate_2025.csv     (sem --mes, ano inteiro)
+    sufixo_periodo = f"_ate_{ano_final}-{int(mes):02d}" if mes else f"_ate_{ano_final}"
+    nome_arquivo_final = f"./final_ind_legis_{legislatura_atual}{sufixo_periodo}.csv"
+    final_ind_legis_filtrado.to_csv(nome_arquivo_final, sep=';', decimal=',', index=False)
+    print(f"Arquivo final salvo: {nome_arquivo_final}")
 
 
 if __name__ == "__main__":
     main()
-

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Painel Legisla{% endblock %}
+{% block head %}
+<meta name="csrf-token" content="{{ csrf }}">
+{% endblock %}
+{% block body %}
+<header>
+  <h1>Painel Legisla</h1>
+  <a href="/logout" class="sair">Sair</a>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Nova extração</h2>
+    <p class="sub">Selecione a data de término. O corte é sempre no <strong>último dia do mês</strong> escolhido.</p>
+    <form id="form-executar">
+      <div class="linha">
+        <div>
+          <label for="data">Data de término</label>
+          <input type="text" id="data" name="data" placeholder="Escolha uma data" required>
+        </div>
+        <div>
+          <label>Legislatura</label>
+          <input type="text" value="{{ legislatura }}" disabled>
+        </div>
+      </div>
+      <button id="btn-executar" type="submit">Executar extração</button>
+    </form>
+
+    <div id="status-box" class="status oculto"></div>
+  </section>
+
+  <section class="card">
+    <h2>Arquivos extraídos</h2>
+    <div id="lista-wrap">
+      <table>
+        <thead>
+          <tr><th>Arquivo</th><th>Tamanho</th><th>Gerado em</th><th class="acoes">Ações</th></tr>
+        </thead>
+        <tbody id="lista-csv">
+          {% for c in csvs %}
+          <tr data-nome="{{ c.nome }}">
+            <td><a href="/download/{{ c.nome }}">{{ c.nome }}</a></td>
+            <td>{{ c.tamanho_kb }} KB</td>
+            <td>{{ c.modificado }}</td>
+            <td class="acoes">
+              <a class="btn-mini" href="/download/{{ c.nome }}">Baixar</a>
+              <button class="btn-mini perigo btn-excluir" data-nome="{{ c.nome }}">Excluir</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr class="vazia"><td colspan="4">Nenhum CSV extraído ainda.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js"></script>
+{% endblock %}

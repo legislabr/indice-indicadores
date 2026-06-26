@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Login - Painel Legisla{% endblock %}
+{% block body %}
+<div class="wrap">
+  <form class="card" method="post" action="/login" autocomplete="off">
+    <h1>Painel Legisla</h1>
+    <p class="sub">Extração de Indicadores Legislativos</p>
+    {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
+    <label for="senha">Senha</label>
+    <input type="password" id="senha" name="senha" autofocus required>
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}

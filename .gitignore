@@ -1,4 +1,12 @@
 __pycache__/
 cache_api/
 data/
-/tmp/
+temp/
+temp-bkp/
+temp2/
+logs/
+.env
+.env.*
+!.env.example
+.venv/
+*.csv

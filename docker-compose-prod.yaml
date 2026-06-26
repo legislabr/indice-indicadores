@@ -1,0 +1,45 @@
+# Ambiente de PRODUÇÃO/STAGING do painel.
+# Não difere estruturalmente entre dev/staging/prod: tudo é controlado por .env.
+# O painel fica atrás do Traefik (rede externa "web"), com HTTPS via Let's Encrypt.
+#
+#   cp .env.example .env   # e preencha PAINEL_HOST, PAINEL_SENHA_HASH, etc.
+#   docker compose -f docker-compose-prod.yaml up -d --build
+#
+# Requer que a rede externa "web" já exista (criada pelo Traefik em legisla-deploy/).
+services:
+  painel:
+    build:
+      context: .
+      dockerfile: painel/Dockerfile
+    image: painel-legisla:prod
+    container_name: painel-legisla
+    environment:
+      - DATA_DIR=/data
+      - SCRIPT_PATH=/app/scripts/gera_csv.py
+      - PAINEL_SECRET_KEY=${PAINEL_SECRET_KEY}
+      - PAINEL_SENHA_HASH=${PAINEL_SENHA_HASH}
+      - LEGISLATURA_ATUAL=${LEGISLATURA_ATUAL:-57}
+    volumes:
+      - ./data:/data
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      # Roteamento por host
+      - traefik.http.routers.painel.rule=Host(`${PAINEL_HOST:-painellegisla.hacklab.com.br}`)
+      - traefik.http.routers.painel.entrypoints=websecure
+      - traefik.http.routers.painel.tls=true
+      - traefik.http.routers.painel.tls.certresolver=le
+      - traefik.http.routers.painel.middlewares=painel-rl@docker
+      # Porta interna do container
+      - traefik.http.services.painel.loadbalancer.server.port=8000
+      # Rate-limit para mitigar força-bruta no login
+      - traefik.http.middlewares.painel-rl.ratelimit.average=5
+      - traefik.http.middlewares.painel-rl.ratelimit.burst=10
+      - traefik.http.middlewares.painel-rl.ratelimit.period=1m
+    restart: unless-stopped
+
+networks:
+  web:
+    external: true

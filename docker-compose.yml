@@ -1,0 +1,25 @@
+# Ambiente LOCAL de desenvolvimento do painel.
+# Levanta o painel em http://localhost:8000, sem Traefik/HTTPS.
+#
+#   cp .env.example .env   # e preencha PAINEL_SENHA_HASH
+#   docker compose up -d --build
+#
+services:
+  painel:
+    build:
+      context: .
+      dockerfile: painel/Dockerfile
+    image: painel-legisla:local
+    container_name: painel-legisla
+    ports:
+      - "8000:8000"
+    volumes:
+      # CSVs gerados + cache (temp/) + logs ficam aqui no host
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+      - SCRIPT_PATH=/app/scripts/gera_csv.py
+      - PAINEL_SECRET_KEY=${PAINEL_SECRET_KEY:-dev-secret-troque}
+      - PAINEL_SENHA_HASH=${PAINEL_SENHA_HASH}
+      - LEGISLATURA_ATUAL=${LEGISLATURA_ATUAL:-57}
+    restart: unless-stopped
