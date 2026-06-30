@@ -3,6 +3,7 @@
 
   const csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
   const $data = document.getElementById("data");
+  const $legislatura = document.getElementById("legislatura");
   const $form = document.getElementById("form-executar");
   const $btn = document.getElementById("btn-executar");
   const $status = document.getElementById("status-box");
@@ -167,13 +168,19 @@
       e.preventDefault();
       const data = ($data.value || "").trim();
       if (!data) { flash("Escolha uma data."); return; }
+      const legislatura = parseInt(($legislatura.value || "").trim(), 10);
+      if (!Number.isFinite(legislatura) || legislatura <= 57) {
+        flash("Legislatura deve ser um número maior que 57.");
+        $legislatura.focus();
+        return;
+      }
       $btn.disabled = true;
       autoScroll = true; // nova execução: sempre cola no fim
       try {
         const r = await fetch("/api/executar", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-          body: JSON.stringify({ data: data }),
+          body: JSON.stringify({ data: data, legislatura: legislatura }),
         });
         const j = await r.json();
         if (r.ok && j.ok) {

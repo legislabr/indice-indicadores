@@ -139,6 +139,7 @@ async def logout():
 # --------------------------------------------------------------------------- #
 class RunIn(BaseModel):
     data: str  # ISO YYYY-MM-DD
+    legislatura: int | None = None  # se omitido, usa o default do painel
 
 
 @app.post("/api/executar")
@@ -156,11 +157,18 @@ async def api_executar(payload: RunIn, request: Request):
     ano_final = dt.year
     mes = f"{dt.month:02d}"
 
+    legislatura = payload.legislatura if payload.legislatura is not None else LEGISLATURA_DEFAULT
+    if legislatura <= 57:
+        raise HTTPException(
+            status_code=400,
+            detail="Legislatura deve ser um número maior que 57.",
+        )
+
     if runner.is_running():
         raise HTTPException(status_code=409, detail="Já existe uma extração em execução.")
 
     try:
-        await runner.start_run(ano_final=ano_final, mes=mes, legislatura=LEGISLATURA_DEFAULT)
+        await runner.start_run(ano_final=ano_final, mes=mes, legislatura=legislatura)
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
 

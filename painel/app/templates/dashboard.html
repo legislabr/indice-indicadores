@@ -20,8 +20,8 @@
           <input type="text" id="data" name="data" placeholder="Escolha uma data" required>
         </div>
         <div>
-          <label>Legislatura</label>
-          <input type="text" value="{{ legislatura }}" disabled>
+          <label for="legislatura">Legislatura</label>
+          <input type="number" id="legislatura" name="legislatura" min="58" step="1" value="{{ legislatura if legislatura and legislatura > 57 else 58 }}" inputmode="numeric">
         </div>
       </div>
       <button id="btn-executar" type="submit">Executar extração</button>
