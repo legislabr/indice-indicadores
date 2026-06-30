@@ -26,15 +26,21 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=web
-      # Roteamento por host
-      - traefik.http.routers.painel.rule=Host(`${PAINEL_HOST:-painellegisla.hacklab.com.br}`)
-      - traefik.http.routers.painel.entrypoints=websecure
-      - traefik.http.routers.painel.tls=true
-      - traefik.http.routers.painel.tls.certresolver=le
-      - traefik.http.routers.painel.middlewares=painel-rl@docker
+      # Roteamento por host nas duas portas (atende Cloudflare Flexible e Full)
+      # HTTP (porta 80)
+      - traefik.http.routers.painel-http.rule=Host(`${PAINEL_HOST:-painel-legisla.hacklab.com.br}`)
+      - traefik.http.routers.painel-http.entrypoints=web
+      - traefik.http.routers.painel-http.service=painel-svc
+      # HTTPS (porta 443, cert self-signed default na origem)
+      - traefik.http.routers.painel-https.rule=Host(`${PAINEL_HOST:-painel-legisla.hacklab.com.br}`)
+      - traefik.http.routers.painel-https.entrypoints=websecure
+      - traefik.http.routers.painel-https.tls=true
+      - traefik.http.routers.painel-https.service=painel-svc
       # Porta interna do container
-      - traefik.http.services.painel.loadbalancer.server.port=8000
-      # Rate-limit para mitigar força-bruta no login
+      - traefik.http.services.painel-svc.loadbalancer.server.port=8000
+      # Rate-limit para mitigar força-bruta no login (aplicado a ambos os routers)
+      - traefik.http.routers.painel-http.middlewares=painel-rl@docker
+      - traefik.http.routers.painel-https.middlewares=painel-rl@docker
       - traefik.http.middlewares.painel-rl.ratelimit.average=5
       - traefik.http.middlewares.painel-rl.ratelimit.burst=10
       - traefik.http.middlewares.painel-rl.ratelimit.period=1m
