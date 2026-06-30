@@ -158,10 +158,10 @@ async def api_executar(payload: RunIn, request: Request):
     mes = f"{dt.month:02d}"
 
     legislatura = payload.legislatura if payload.legislatura is not None else LEGISLATURA_DEFAULT
-    if legislatura <= 57:
+    if legislatura < 57:
         raise HTTPException(
             status_code=400,
-            detail="Legislatura deve ser um número maior que 57.",
+            detail="Legislatura deve ser maior ou igual a 57.",
         )
 
     if runner.is_running():

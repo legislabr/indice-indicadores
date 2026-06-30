@@ -169,8 +169,8 @@
       const data = ($data.value || "").trim();
       if (!data) { flash("Escolha uma data."); return; }
       const legislatura = parseInt(($legislatura.value || "").trim(), 10);
-      if (!Number.isFinite(legislatura) || legislatura <= 57) {
-        flash("Legislatura deve ser um número maior que 57.");
+      if (!Number.isFinite(legislatura) || legislatura < 57) {
+        flash("Legislatura deve ser maior ou igual a 57.");
         $legislatura.focus();
         return;
       }
